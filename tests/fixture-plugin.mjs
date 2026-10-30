@@ -1,0 +1,53 @@
+import { mkdir, writeFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
+import { randomUUID } from 'node:crypto';
+export const inject = ['workspaceRegistry', 'sessions', 'sessionTitle', 'sessionPersistence'];
+export async function apply(ctx) {
+  if (!process.env.DSH_HOME?.includes('.dev')) throw new Error('Fixture requires isolated development home.');
+  const directory = resolve(`.dev/example-workspace-${randomUUID()}`); await mkdir(directory, { recursive: true });
+  const workspace = await ctx.workspaceRegistry.create(directory, '插件试用项目');
+  const session = ctx.sessions.create(`session-${randomUUID()}`, { meta: { cwd: directory } });
+  session.append('turn/start', { turn: 1 });
+  session.append('user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: '这是一条本地合成会话，用于验证任务资料夹。无需调用模型。' }], source: { kind: 'user' } }, { surfaceOp: 'append' });
+  ctx.sessionTitle.rename(session, '任务资料夹 · 合成讨论');
+  session.append('turn/end', { turn: 1, reason: 'completed' });
+  const handle = await ctx.sessionPersistence.create(session.header);
+  await handle.append(session.snapshotEvents());
+  await handle.flush();
+  await handle.close();
+  await workspace.attachSession(session.id);
+  await ctx.sessionPersistence.flush();
+  const second = ctx.sessions.create(`session-${randomUUID()}`, { meta: { cwd: directory } });
+  second.append('turn/start', { turn: 1 });
+  second.append('user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: '第二段合成讨论：部署只能在本地进行，下一步验证重启后数据保留。' }], source: { kind: 'user' } }, { surfaceOp: 'append' });
+  ctx.sessionTitle.rename(second, '任务资料夹 · 合成部署讨论');
+  second.append('turn/end', { turn: 1, reason: 'completed' });
+  const secondHandle = await ctx.sessionPersistence.create(second.header);
+  await secondHandle.append(second.snapshotEvents()); await secondHandle.close();
+  await workspace.attachSession(second.id);
+  const { readContext } = await import('../src/handoff.js');
+  await readContext(ctx, second.id);
+  const foreignDirectory = resolve(`.dev/foreign-workspace-${randomUUID()}`); await mkdir(foreignDirectory, { recursive: true });
+  const foreignWorkspace = await ctx.workspaceRegistry.create(foreignDirectory, '跨工作区来源项目');
+  const foreign = ctx.sessions.create(`session-${randomUUID()}`, { meta: { cwd: foreignDirectory } });
+  foreign.append('turn/start', { turn: 1 });
+  foreign.append('user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: '另一工作区的合成讨论：交接时保留来源工作区，不移动原会话。' }], source: { kind: 'user' } }, { surfaceOp: 'append' });
+  ctx.sessionTitle.rename(foreign, '任务资料夹 · 跨区合成讨论');
+  foreign.append('turn/end', { turn: 1, reason: 'completed' });
+  const foreignHandle = await ctx.sessionPersistence.create(foreign.header);
+  await foreignHandle.append(foreign.snapshotEvents()); await foreignHandle.close();
+  await foreignWorkspace.attachSession(foreign.id); await readContext(ctx, foreign.id);
+  const targetDirectory = resolve(`.dev/target-workspace-${randomUUID()}`); await mkdir(targetDirectory, { recursive: true });
+  const targetWorkspace = await ctx.workspaceRegistry.create(targetDirectory, '跨工作区交接目标');
+  const compressionSessions = [];
+  for (const [i, length] of [18000, 10500, 10500, 10500].entries()) {
+    const owner = i % 2 ? foreignWorkspace : workspace, cwd = i % 2 ? foreignDirectory : directory;
+    const item = ctx.sessions.create(`session-${randomUUID()}`, { meta: { cwd } });
+    item.append('turn/start', { turn: 1 });
+    item.append('user/message', { id: randomUUID(), role: 'user', content: [{ type: 'text', text: `合成压缩来源 ${i} 开头：保留目标。${'验证'.repeat(length / 2)}结尾：下一步核对。` }], source: { kind: 'user' } }, { surfaceOp: 'append' });
+    ctx.sessionTitle.rename(item, `压缩验收讨论 ${i}`); item.append('turn/end', { turn: 1, reason: 'completed' });
+    const writer = await ctx.sessionPersistence.create(item.header); await writer.append(item.snapshotEvents()); await writer.close(); await owner.attachSession(item.id);
+    compressionSessions.push({ sessionId: item.id, workspaceId: owner.id, title: `压缩验收讨论 ${i}` });
+  }
+  await writeFile('.dev/fixture.json', JSON.stringify({ workspaceId: workspace.id, sessionId: session.id, secondSessionId: second.id, foreignWorkspaceId: foreignWorkspace.id, foreignSessionId: foreign.id, targetWorkspaceId: targetWorkspace.id, compressionSessions }));
+}

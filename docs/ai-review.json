@@ -1,0 +1,942 @@
+{
+  "schema": "dsh-task-shelf/review@1",
+  "review": {
+    "id": "DSH-TS-REV-001",
+    "title": "DSH Task Shelf 设计评审（AI 交接版）",
+    "date": "2026-10-28",
+    "reviewer": "DSH coding agent",
+    "target": "DSH Task Shelf design (v0.1 baseline, reconciled to v0.2)",
+    "baseline_version": "v0.1",
+    "current_docs_version": "v0.2",
+    "reconciled_at": "2026-10-28",
+    "target_files": [
+      "README.md",
+      "docs/V1-PLAN.md",
+      "docs/SECURITY-DESIGN.md",
+      "docs/VALIDATION-RELEASE.md",
+      "docs/OPEN-SOURCE.md",
+      "docs/EVIDENCE.md"
+    ],
+    "runtime_checked": "DSH 0.2.1-rc.3 (desktop runtime)",
+    "check_type": "static contract review; no plugin installed or executed",
+    "verdict": "feasible_with_changes",
+    "confidence": "high for DSH 0.2.1-rc.3; medium for other versions",
+    "markdown": "docs/AI-REVIEW.md"
+  },
+  "counts": {
+    "blocker": 4,
+    "high": 4,
+    "medium": 11,
+    "low": 1,
+    "total": 20,
+    "after_v0_2": {
+      "addressed": 3,
+      "partial": 9,
+      "open": 8
+    }
+  },
+  "reconciliation": {
+    "current_docs_version": "v0.2",
+    "reviewed_docs": [
+      "README.md",
+      "docs/V1-PLAN.md",
+      "docs/SECURITY-DESIGN.md",
+      "docs/VALIDATION-RELEASE.md",
+      "docs/EVIDENCE.md"
+    ],
+    "counts": {
+      "addressed": 3,
+      "partial": 9,
+      "open": 8
+    },
+    "addressed": [
+      "R-010",
+      "R-011",
+      "R-020"
+    ],
+    "partial": [
+      "R-003",
+      "R-004",
+      "R-006",
+      "R-008",
+      "R-009",
+      "R-012",
+      "R-014",
+      "R-016",
+      "R-018"
+    ],
+    "open": [
+      "R-001",
+      "R-002",
+      "R-005",
+      "R-007",
+      "R-013",
+      "R-015",
+      "R-017",
+      "R-019"
+    ],
+    "residual_blockers": [
+      "R-001",
+      "R-002",
+      "R-003",
+      "R-004"
+    ],
+    "v0_2_strengths": [
+      "V1-PLAN §3 adds current-task, primary-session, edit/conflict/unknown-result interaction contracts.",
+      "V1-PLAN §5 separates source from local binding and adds unresolved/resolved/missing/unavailable reference states.",
+      "V1-PLAN §5.3 uses 64 KiB requests with incremental writes and a 32 MiB import with 32 KiB chunks.",
+      "V1-PLAN §6.2 adds operationId, durable idempotency receipts, and result queries.",
+      "V1-PLAN §6.3 adds staging, preview, atomic commit, and duplicate-import detection.",
+      "VALIDATION adds D06-D08, R03/R04, I02-I07, U01-U05, P03, and C03."
+    ],
+    "by_id": {
+      "R-001": {"status": "open", "note": "v0.2 still says 'verified Remote' without a client bundle build, Typert generator, or channel contract."},
+      "R-002": {"status": "open", "note": "FileLocator remains relativePath only; the P1 probe will expose the session requirement."},
+      "R-003": {"status": "partial", "note": "Incremental writes and staging added; backup 3 copies, bad-data read-only, and cross-process behavior still lack a storage API."},
+      "R-004": {"status": "partial", "note": "Incremental writes and 32 MiB import added; 20 MiB vs 500 shelves x 100 messages x 5 KiB and the 32 MiB export cap are still inconsistent."},
+      "R-005": {"status": "open", "note": "The panel seat is still unnamed; the right-sidebar risk remains."},
+      "R-006": {"status": "partial", "note": "A P1 probe was added; MessageLocator is still messageId only and the capture entry is not designed."},
+      "R-007": {"status": "open", "note": "SECURITY-DESIGN §6 is unchanged; sanitizeProfile and Desktop shell ownership are not mentioned."},
+      "R-008": {"status": "partial", "note": "Reference states were added; workspacePath and the archived-session open path are still missing."},
+      "R-009": {"status": "partial", "note": "Current task per window/workspace was added; the public API path remains a P1 probe."},
+      "R-010": {"status": "addressed", "note": "v0.2 states that other windows are rejected on the next operation and refreshed; no polling."},
+      "R-011": {"status": "addressed", "note": "originId/exportId, mapping, duplicate block, R03/R04/I06/I07 were added; a workspace path hint remains optional."},
+      "R-012": {"status": "partial", "note": "schemaVersion is still only in the export envelope; storage-side version and workspacePath are missing."},
+      "R-013": {"status": "open", "note": "The 3-copy backup and clear-data promises still have no API landing point."},
+      "R-014": {"status": "partial", "note": "Lazy panel loading is stated; the domain open cost is not explicitly measured."},
+      "R-015": {"status": "open", "note": "No product positioning section against workspace/goal/todo/deliverables/session-reference."},
+      "R-016": {"status": "partial", "note": "v0.2 admits no upstream re-check; the evidence is still not pinned to an exact version or commit."},
+      "R-017": {"status": "open", "note": "No path sanitization design; S02 remains generic."},
+      "R-018": {"status": "partial", "note": "C03/L03/L04 probes were added; disable-while-selected is not explicit."},
+      "R-019": {"status": "open", "note": "A single workspaceId remains; the cross-workspace scope decision is still deferred."},
+      "R-020": {"status": "addressed", "note": "32 MiB import plus 32 KiB chunks were added."}
+    }
+  },
+  "findings": [
+    {
+      "id": "R-001",
+      "severity": "blocker",
+      "status": "needs-spike",
+      "area": "build/rpc",
+      "title": "第三方客户端 bundle 的构建与 Host↔Client 通道未定义",
+      "claim": "方案把 client 发 Remote 请求当成现成能力；当前 DSH 要求预构建 lib/client.js 与 Typert 生成的 descriptor，且 dsh-api-remotes 的能力集是构建期固定的。",
+      "evidence": [
+        {
+          "source": "dsh-client-modules README",
+          "locator": "Declaring a client plugin / Build requirements",
+          "observation": "dsh.client + platform web; Host serves prebuilt lib/client.js; pnpm run build must produce it first."
+        },
+        {
+          "source": "dsh-api-gateway README",
+          "locator": "Host service / Client service",
+          "observation": "ctx.remote consumes generated Typert invocation descriptors and strict codecs."
+        },
+        {
+          "source": "dsh-api-remotes README",
+          "locator": "Forwarded Host events / Known limitations",
+          "observation": "Capability set is fixed by build-time value imports; adding a capability needs an explicit /remote import and mount."
+        },
+        {
+          "source": "installed package set 0.2.1-rc.3",
+          "locator": "@deepseek-ai/dsh-typert-*",
+          "observation": "loader, registry, and protocol are installed; the generator is not part of the installed dependency set."
+        }
+      ],
+      "impact": "P1 cannot start without solving this; if the generator or client build preset is not externally available, the UI architecture must move to a host exact HTTP route with self-owned auth and validation.",
+      "fix": [
+        "Run a P0 hello-world: host row, client panel, and one ping Remote installed from a local path.",
+        "Decide Typert vs exact route; confirm external availability of the Typert generator and the client bundle preset.",
+        "Add docs/API-CONTRACT.md fixing build outputs, dependencies, and version."
+      ],
+      "acceptance": [
+        "Local path install succeeds; the panel appears; ping returns.",
+        "Enable/disable/reload 20 times without duplicate registration.",
+        "The packaged lib/client.js loads in a real installation."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §4",
+        "docs/VALIDATION-RELEASE.md §3 C01/L04"
+      ]
+    },
+    {
+      "id": "R-002",
+      "severity": "blocker",
+      "status": "needs-spike",
+      "area": "files",
+      "title": "fileRefs 缺 session 锚点，原生预览无法单独打开",
+      "claim": "只存 relativePath 不足以打开 DSH 原生预览；预览地址必须带 session。",
+      "evidence": [
+        {
+          "source": "dsh-client-ui-sidebar-documentpreview README",
+          "locator": "Addresses",
+          "observation": "canOpen accepts only Session addresses; addresses are built by fileAddressFor."
+        },
+        {
+          "source": "dsh-api-workspace-files README",
+          "locator": "Use this package / Addressing and paths",
+          "observation": "read/stat/readBytes/list all take a sessionId; absolute/<path> fails with workspace-file/unknown-workspace."
+        },
+        {
+          "source": "DSH file address scheme",
+          "locator": "workspace-files example",
+          "observation": "The address is dsh-resource://file/session/<sessionId>/<path>."
+        }
+      ],
+      "impact": "The file reference feature only works when a usable session exists; no-session, archived, and cross-workspace cases are undefined.",
+      "fix": [
+        "Resolve a usable session in the workspace at open time: primarySessionId or another session in the same workspace.",
+        "Or add an optional sessionId to fileRefs; do not store only a path.",
+        "Define fallbacks for no session, archived primary, and missing file."
+      ],
+      "acceptance": [
+        "Preview succeeds with a primary session.",
+        "No session produces a clear message, not an uncaught error.",
+        "Archived primary degrades to another session or shows an Unarchive hint."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §2/§5",
+        "docs/SECURITY-DESIGN.md §2"
+      ]
+    },
+    {
+      "id": "R-003",
+      "severity": "blocker",
+      "status": "needs-spike",
+      "area": "storage",
+      "title": "存储域语义与可靠性承诺冲突",
+      "claim": "ctx.storageDomain does not support the claimed bad-data read-only recovery, 3-copy backup, atomic migration, or cross-process safety.",
+      "evidence": [
+        {
+          "source": "dsh-storage-domain README",
+          "locator": "Open sequence",
+          "observation": "open() loads and validates every stored record; any invalid-record rejects the whole open."
+        },
+        {
+          "source": "dsh-storage-domain README",
+          "locator": "Known limitations",
+          "observation": "No data migration; a version mismatch rejects at open. domain/changed is single-process."
+        },
+        {
+          "source": "dsh-storage-json README",
+          "locator": "Known limitations",
+          "observation": "No cross-process write locking; single layout rewrites the whole unit on every write."
+        }
+      ],
+      "impact": "Reliability claims in SECURITY-DESIGN and VALIDATION D02-D05 cannot be implemented as written.",
+      "fix": [
+        "Choose the per-record layout to reduce write amplification and isolate corrupt records.",
+        "Put schemaVersion in a global or record field and migrate in application code; do not treat a domain version bump as migration.",
+        "State that only one host process is supported; document the multi-process limitation.",
+        "Replace background backup rotation with export-based backup; drop the 3-copy promise.",
+        "Use a namespaced domain name such as dsh-task-shelf to avoid already-open collisions."
+      ],
+      "acceptance": [
+        "One bad record has defined behavior and does not brick the whole domain.",
+        "A host kill mid-write leaves either the old or the new data complete.",
+        "Two host processes writing the same DSH_HOME have a documented and tested outcome."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5/§6",
+        "docs/SECURITY-DESIGN.md §5",
+        "docs/VALIDATION-RELEASE.md D02-D05"
+      ]
+    },
+    {
+      "id": "R-004",
+      "severity": "blocker",
+      "status": "doc-fix",
+      "area": "limits",
+      "title": "限额、请求上限、存储上限不能同时成立",
+      "claim": "500 shelves x 100 messages x 5 KiB greatly exceeds 20 MiB; one maxed shelf also exceeds the 64 KiB request cap.",
+      "evidence": [
+        {
+          "source": "docs/V1-PLAN.md §5",
+          "locator": "Limits",
+          "observation": "500 shelves; 50 sessions / 100 messages / 100 files per shelf; note 4 KiB, excerpt 1 KiB; 64 KiB per request; 20 MiB storage; 10 MiB import."
+        },
+        {
+          "source": "calculation",
+          "locator": "Quota math",
+          "observation": "Per-shelf max is about 630 KiB; 500 shelves about 307 MiB; 20 MiB holds about 32 maxed shelves."
+        },
+        {
+          "source": "calculation",
+          "locator": "Request math",
+          "observation": "100 messages x (1 KiB excerpt + 4 KiB note) = 500 KiB, greater than 64 KiB."
+        }
+      ],
+      "impact": "A maxed shelf cannot be saved; the 500-shelf cap is meaningless; P01 cannot pass.",
+      "fix": [
+        "Recompute and pin a compatible set: per-shelf cap, total cap, and average cap.",
+        "Use item-level writes, or raise the request cap to at least 512 KiB.",
+        "Send imports through file upload or chunking, not the 64 KiB ordinary request path."
+      ],
+      "acceptance": [
+        "A maxed shelf can be saved.",
+        "Reaching the total cap rejects explicitly without silent deletion.",
+        "P01 records p95 on the target machine."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5",
+        "docs/VALIDATION-RELEASE.md P01/I01"
+      ]
+    },
+    {
+      "id": "R-005",
+      "severity": "high",
+      "status": "doc-fix",
+      "area": "ui",
+      "title": "UI 落点未指定；全局面板生命周期未验证",
+      "claim": "The design says sidebar entry plus panel but never names the seat; the correct seat is sidebar.panellist plus the layout root-scoped main keyed slot.",
+      "evidence": [
+        {
+          "source": "dsh-client-ui-sidebar README",
+          "locator": "Global panel entries",
+          "observation": "Plugins add an icon component to sidebar.panellist; the same id addresses the layout main keyed slot."
+        },
+        {
+          "source": "dsh-client-ui-sidebar README",
+          "locator": "Global panel entries",
+          "observation": "Selecting a missing main entry throws without changing the current selection."
+        },
+        {
+          "source": "dsh-client-ui-sidebar-right README",
+          "locator": "Known limitations",
+          "observation": "No surface without a session; state is keyed by session id."
+        }
+      ],
+      "impact": "Using the right sidebar makes the shelf disappear on the hero screen; disabling the plugin while its panel is selected may throw.",
+      "fix": [
+        "Name sidebar.panellist + main explicitly in the design.",
+        "Add tests for disable/reload while the panel is selected and for a failed client bundle.",
+        "Define the fallback when the selected main entry disappears."
+      ],
+      "acceptance": [
+        "The panel opens with no session.",
+        "Disable and re-enable while selected without throwing."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §3",
+        "docs/VALIDATION-RELEASE.md L03/C02"
+      ]
+    },
+    {
+      "id": "R-006",
+      "severity": "high",
+      "status": "needs-spike",
+      "area": "messages",
+      "title": "“关键消息”的身份与收藏入口不明确",
+      "claim": "Finalized assistant messages have a public messageId precedent; user messages are not valid message-feedback targets; a global panel cannot know the selected message.",
+      "evidence": [
+        {
+          "source": "dsh-message-feedback README",
+          "locator": "Reading and changing feedback / Targets",
+          "observation": "Targets must be non-empty assistant messages from append-origin events; user messages return target-not-found."
+        },
+        {
+          "source": "dsh-client-ui-message-feedback README",
+          "locator": "Understand the implementation",
+          "observation": "The feedback controls are an entry of conversation.chat.assistant-actions."
+        }
+      ],
+      "impact": "The bookmark action may be placed where it cannot see a message, and user-message references may be unstable.",
+      "fix": [
+        "For v1 bookmark only finalized assistant messages; or use (sessionId, seq) for arbitrary messages.",
+        "Put the capture action in conversation.chat.assistant-actions.",
+        "Keep the open-session fallback when no public reveal API exists; do not promise exact positioning."
+      ],
+      "acceptance": [
+        "The message action writes a ref with a correct excerpt.",
+        "Opening the referenced session succeeds.",
+        "User-message behavior is explicitly defined."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §2/§5",
+        "docs/VALIDATION-RELEASE.md R01"
+      ]
+    },
+    {
+      "id": "R-007",
+      "severity": "high",
+      "status": "doc-fix",
+      "area": "desktop",
+      "title": "桌面端安装/恢复路径写错了一半",
+      "claim": "The desktop profile is Electron-owned; the npm CLI rejects plugin management; the Desktop shell owns package operations.",
+      "evidence": [
+        {
+          "source": "@deepseek-ai/dsh README",
+          "locator": "Profiles",
+          "observation": "The desktop name is reserved for the Electron-owned profile; the npm CLI rejects its plugin-management requests; the Desktop-installed command can manage it."
+        },
+        {
+          "source": "dsh-plugin-manager README",
+          "locator": "Known limitations",
+          "observation": "Desktop package operations remain owned by the Desktop shell."
+        },
+        {
+          "source": "dsh-app-boot README",
+          "locator": "Profiles",
+          "observation": "sanitizeProfile provides native fatal recovery by renaming cordis.patch.yml to a .bak-timestamp sibling and restoring the bundle list."
+        }
+      ],
+      "impact": "Release and recovery tests will use the wrong commands for desktop users.",
+      "fix": [
+        "Desktop: use the Desktop plugin management entry, or sanitizeProfile for fatal recovery.",
+        "Web: use dsh plugin --profile web.",
+        "Add desktop install/disable/uninstall/recovery to L02 and C01."
+      ],
+      "acceptance": [
+        "A disposable desktop profile completes install, disable, uninstall, and recovery."
+      ],
+      "doc_targets": [
+        "docs/SECURITY-DESIGN.md §6",
+        "docs/VALIDATION-RELEASE.md L02/C01"
+      ]
+    },
+    {
+      "id": "R-008",
+      "severity": "high",
+      "status": "doc-fix",
+      "area": "workspace",
+      "title": "Workspace 身份会漂移；归档会话不能直接打开",
+      "claim": "Removing and re-adding the same directory creates a fresh project; storing only workspaceId loses the shelf. DSH has no ordinary session deletion; the real degraded state is archived or hidden.",
+      "evidence": [
+        {
+          "source": "dsh-workspace README",
+          "locator": "Hiding and restoring sessions, and removing projects",
+          "observation": "Re-adding a removed directory creates a fresh project; re-adding the same directory starts fresh without the old sessions."
+        },
+        {
+          "source": "dsh-client-ui-workspace README",
+          "locator": "Search",
+          "observation": "Archived results offer Unarchive; attempting to open one explains the restriction."
+        },
+        {
+          "source": "dsh-workspace README",
+          "locator": "Known limitations",
+          "observation": "Session deletion or folder removal are separate, absent capabilities."
+        }
+      ],
+      "impact": "Shelves can point at a stale workspace id; R01 is written against a capability that does not exist.",
+      "fix": [
+        "Store workspaceId plus a canonical path or display name; remap by path on open.",
+        "Show an archived badge and an Unarchive hint; do not promise direct opening.",
+        "Rewrite R01 around archived, hidden, and missing-log states."
+      ],
+      "acceptance": [
+        "Remove and re-add a workspace; the shelf can rebind.",
+        "An archived session produces a clear, actionable message."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5/§7",
+        "docs/VALIDATION-RELEASE.md R01"
+      ]
+    },
+    {
+      "id": "R-009",
+      "severity": "medium",
+      "status": "needs-spike",
+      "area": "ui",
+      "title": "全局面板拿不到“当前 session / workspace”",
+      "claim": "It is unverified whether useSessions and useWorkspaces are visible to a main slot; a root-scoped panel may have no current workspace on the hero screen.",
+      "evidence": [
+        {
+          "source": "dsh-client-ui-sidebar README",
+          "locator": "Global panel entries",
+          "observation": "Panel registrations are root-scoped; the sidebar shell composes the session and workspace hooks."
+        },
+        {
+          "source": "docs/V1-PLAN.md §3",
+          "locator": "Minimal interaction",
+          "observation": "New shelf uses the current workspace; add-to-current-task assumes a current session."
+        }
+      ],
+      "impact": "Two primary actions may be unavailable or ambiguous on the hero screen.",
+      "fix": [
+        "Verify the standard props available to the main slot.",
+        "If absent, drive add-to-shelf from message/file actions or require an explicit workspace picker.",
+        "Define the no-current-workspace state."
+      ],
+      "acceptance": [
+        "The panel can resolve a session and workspace, or the flows no longer depend on them."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §3"
+      ]
+    },
+    {
+      "id": "R-010",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "sync",
+      "title": "多窗口实时同步不可用",
+      "claim": "domain/changed is in-process only; the forwarded-event allowlist is build-time fixed; live multi-window sync cannot be promised.",
+      "evidence": [
+        {
+          "source": "dsh-storage-domain README",
+          "locator": "Known limitations",
+          "observation": "Single-process change visibility; a second host or reconnecting GUI observes no changes until the cross-process revision pattern lands."
+        },
+        {
+          "source": "dsh-api-remotes README",
+          "locator": "Forwarded Host events",
+          "observation": "The forwarded-event allowlist is fixed in the app assembly."
+        }
+      ],
+      "impact": "Two windows can show stale shelves; a stale save may conflict.",
+      "fix": [
+        "Refresh on window focus or visibility change.",
+        "Carry revision on save and show a conflict.",
+        "Do not claim real-time synchronization."
+      ],
+      "acceptance": [
+        "Window B refreshes on focus after a Window A edit.",
+        "A stale save produces an explicit conflict."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §3/§6",
+        "docs/VALIDATION-RELEASE.md D01"
+      ]
+    },
+    {
+      "id": "R-011",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "import/export",
+      "title": "导入/导出缺 workspace 映射与去重策略",
+      "claim": "The export carries only local workspaceId and session title snapshots; there is no workspace path or name and no origin id for duplicate detection.",
+      "evidence": [
+        {
+          "source": "docs/V1-PLAN.md §5",
+          "locator": "Data model / cross-machine import",
+          "observation": "ExportEnvelope has format, schemaVersion, exportedAt, and shelves; the shelf carries workspaceId."
+        },
+        {
+          "source": "docs/V1-PLAN.md §2",
+          "locator": "Data carrying",
+          "observation": "Import receives only this project JSON and must remap before writing."
+        }
+      ],
+      "impact": "Cross-machine import is manual and error-prone; duplicate imports are undefined.",
+      "fix": [
+        "Add workspaceHints with path and display name.",
+        "Add originId to shelves for duplicate detection.",
+        "Preview the mapping and state the duplicate policy."
+      ],
+      "acceptance": [
+        "Import on a second machine can suggest a workspace by path or name.",
+        "Importing the same file twice follows a documented policy."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5",
+        "docs/VALIDATION-RELEASE.md I01"
+      ]
+    },
+    {
+      "id": "R-012",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "model",
+      "title": "数据模型缺 schemaVersion、originId、primarySession 完整性",
+      "claim": "schemaVersion exists only in the export envelope; primarySessionId is not required to be in sessionRefs; file refs have no session or line.",
+      "evidence": [
+        {
+          "source": "docs/V1-PLAN.md §5",
+          "locator": "TaskShelf / ExportEnvelope",
+          "observation": "TaskShelf has revision but no storage schemaVersion; primarySessionId is independent of sessionRefs."
+        }
+      ],
+      "impact": "Storage migration and import integrity are underspecified.",
+      "fix": [
+        "Add schemaVersion to stored data.",
+        "Add originId and workspacePath.",
+        "Enforce primarySessionId membership; require messageId or seq; add file sessionId/line."
+      ],
+      "acceptance": [
+        "Old data migrates by schemaVersion.",
+        "An invalid primarySessionId is rejected or repaired.",
+        "Export/import preserves the invariants."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5"
+      ]
+    },
+    {
+      "id": "R-013",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "storage",
+      "title": "备份与“清除本插件数据”没有 API 落点",
+      "claim": "There is no domain backup or drop API; deleting records leaves the backend file; the 3-copy backup promise has no implementation.",
+      "evidence": [
+        {
+          "source": "dsh-storage-domain README",
+          "locator": "Use this package / Known limitations",
+          "observation": "No backup API and no cross-table transaction; delete operates per record."
+        },
+        {
+          "source": "dsh-storage-json README",
+          "locator": "Observable behavior",
+          "observation": "A missing unit opens empty and materializes on the first write."
+        }
+      ],
+      "impact": "The recovery and data-deletion promises cannot be fulfilled as written.",
+      "fix": [
+        "Back up by exporting the domain's records to a user-chosen file.",
+        "Clear data by deleting every record and the global value, then explain the residual file.",
+        "If file removal is required, review an explicit fs path and its security implications."
+      ],
+      "acceptance": [
+        "Export followed by import restores the shelf set.",
+        "Clear removes all records visible to the plugin."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5/§6",
+        "docs/SECURITY-DESIGN.md §5"
+      ]
+    },
+    {
+      "id": "R-014",
+      "severity": "medium",
+      "status": "needs-spike",
+      "area": "performance",
+      "title": "domain open() 全量校验会拖慢启动",
+      "claim": "open() loads and validates every record; if the plugin opens its domain at activation, the cost hits DSH startup rather than the first panel open.",
+      "evidence": [
+        {
+          "source": "dsh-storage-domain README",
+          "locator": "Open sequence",
+          "observation": "Open loads and validates every stored record and the global value."
+        },
+        {
+          "source": "docs/V1-PLAN.md §5/§8",
+          "locator": "Limits / performance",
+          "observation": "The 500 ms budget is for first panel open; the plugin activation path is not measured."
+        }
+      ],
+      "impact": "Startup latency grows with shelf count; P01 may pass the panel test but fail the startup experience.",
+      "fix": [
+        "Open the domain lazily on the first data request.",
+        "Use per-record layout and paginated summaries.",
+        "Measure startup delta with 500 shelves."
+      ],
+      "acceptance": [
+        "Startup delta is recorded and within an agreed budget.",
+        "First panel open stays within its p95 at 500 shelves."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5/§8",
+        "docs/VALIDATION-RELEASE.md P01/P02"
+      ]
+    },
+    {
+      "id": "R-015",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "product",
+      "title": "与原生能力重叠，价值主张需明确",
+      "claim": "Workspaces, pin/archive, search, goals, todos, deliverables, and session references already exist; the README only notes that sidebar persistence is built in.",
+      "evidence": [
+        {
+          "source": "dsh-client-ui-workspace README",
+          "locator": "Summary",
+          "observation": "Workspace browsing, session pinning, archiving, search, fork, and reorder are built in."
+        },
+        {
+          "source": "docs/V1-PLAN.md §1",
+          "locator": "Product goals",
+          "observation": "The design does not position against goals, todos, deliverables, or session references."
+        }
+      ],
+      "impact": "Users may see the shelf as duplicating existing surfaces; adoption depends on a clear unique job.",
+      "fix": [
+        "Add a README section: what the shelf does that workspace + goal + todo cannot.",
+        "State the intended integration with sessions, files, and message actions."
+      ],
+      "acceptance": [
+        "The README answers 'why not just a workspace, a goal, and a todo?' in one paragraph."
+      ],
+      "doc_targets": [
+        "README.md",
+        "docs/V1-PLAN.md §1"
+      ]
+    },
+    {
+      "id": "R-016",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "evidence",
+      "title": "证据未固定到安装版；DSH 文档对 engines.dsh 强制有矛盾",
+      "claim": "EVIDENCE cites master while the installed runtime is 0.2.1-rc.3; DSH's own READMEs disagree on whether installers and loaders enforce engines.dsh.",
+      "evidence": [
+        {
+          "source": "docs/EVIDENCE.md",
+          "locator": "Header",
+          "observation": "The evidence is from master and the target version is not yet fixed."
+        },
+        {
+          "source": "dsh-package-manifest README",
+          "locator": "Known limitations",
+          "observation": "Current installers and loaders do not enforce dsh.manifestVersion or engines.dsh."
+        },
+        {
+          "source": "dsh-app-boot README",
+          "locator": "Profiles",
+          "observation": "Before import, DSH checks the declared DSH requirement; engines.dsh alone decides when present."
+        }
+      ],
+      "impact": "Compatibility assumptions may drift and the install-refusal test may be wrong.",
+      "fix": [
+        "Pin the evidence to the installed version or a commit hash.",
+        "Record the documentation conflict and rely on the app-boot behavior plus a real install test.",
+        "Add an install-refusal test for an exact engines.dsh mismatch."
+      ],
+      "acceptance": [
+        "The compatibility matrix cites an exact version.",
+        "A mismatched engines.dsh is observed to refuse installation."
+      ],
+      "doc_targets": [
+        "docs/EVIDENCE.md",
+        "docs/VALIDATION-RELEASE.md §2"
+      ]
+    },
+    {
+      "id": "R-017",
+      "severity": "low",
+      "status": "doc-fix",
+      "area": "privacy",
+      "title": "日志/错误可能泄露绝对路径",
+      "claim": "DSH errors can carry absolute paths; the design promises logs without absolute paths.",
+      "evidence": [
+        {
+          "source": "docs/SECURITY-DESIGN.md §2",
+          "locator": "Data and access scope",
+          "observation": "Runtime logs should not record absolute paths by default."
+        },
+        {
+          "source": "dsh-api-workspace-files README",
+          "locator": "Addressing and paths",
+          "observation": "File results report the absolute path in the filesystem world."
+        }
+      ],
+      "impact": "An error toast or log may leak a local path despite the privacy claim.",
+      "fix": [
+        "Sanitize every host error before logging or returning it to the client.",
+        "Add an absolute-path sample to S02."
+      ],
+      "acceptance": [
+        "The S02 log scan finds no absolute paths in synthetic tests."
+      ],
+      "doc_targets": [
+        "docs/SECURITY-DESIGN.md §2/§3",
+        "docs/VALIDATION-RELEASE.md S02"
+      ]
+    },
+    {
+      "id": "R-018",
+      "severity": "medium",
+      "status": "needs-spike",
+      "area": "lifecycle",
+      "title": "面板选中时禁用 / 客户端 bundle 失败未覆盖",
+      "claim": "A missing main entry throws; a missing client bundle can fail activation; L03 only tests enable/disable.",
+      "evidence": [
+        {
+          "source": "dsh-client-ui-sidebar README",
+          "locator": "Global panel entries",
+          "observation": "Selecting a missing main entry throws without changing the current selection."
+        },
+        {
+          "source": "dsh-client-modules README",
+          "locator": "Build requirements",
+          "observation": "A missing bundle fails activation loudly."
+        }
+      ],
+      "impact": "Disabling the plugin while its panel is selected may leave the UI in a bad state.",
+      "fix": [
+        "Add disable/reload-while-selected and missing-bundle cases to L03/L04.",
+        "Define the expected fallback selection."
+      ],
+      "acceptance": [
+        "Disable and reload while selected without throwing.",
+        "A missing client bundle shows a recoverable error."
+      ],
+      "doc_targets": [
+        "docs/VALIDATION-RELEASE.md L03/L04"
+      ]
+    },
+    {
+      "id": "R-019",
+      "severity": "medium",
+      "status": "decision",
+      "area": "scope",
+      "title": "跨工作区任务范围被数据模型锁死",
+      "claim": "A single workspaceId per shelf permanently excludes cross-repository tasks, while the product story is about reconnecting work across sessions.",
+      "evidence": [
+        {
+          "source": "docs/V1-PLAN.md §2",
+          "locator": "Scope",
+          "observation": "One shelf belongs to one workspace; cross-workspace combination is deferred."
+        },
+        {
+          "source": "docs/V1-PLAN.md §5",
+          "locator": "TaskShelf",
+          "observation": "workspaceId is a single required string."
+        }
+      ],
+      "impact": "The core 'task' may span repositories; changing later requires a data migration.",
+      "fix": [
+        "Decide now: single-workspace v1 or workspaceIds from the start.",
+        "If single, document the migration path to multiple workspaces."
+      ],
+      "acceptance": [
+        "A written scope decision exists and the data model matches it."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §1/§5"
+      ]
+    },
+    {
+      "id": "R-020",
+      "severity": "medium",
+      "status": "doc-fix",
+      "area": "import",
+      "title": "导入 10 MiB 与 64 KiB 请求上限冲突",
+      "claim": "A 10 MiB import cannot travel through the 64 KiB ordinary request path without chunking or an upload channel.",
+      "evidence": [
+        {
+          "source": "docs/V1-PLAN.md §5",
+          "locator": "Limits",
+          "observation": "Import file max is 10 MiB; one request max is 64 KiB."
+        }
+      ],
+      "impact": "The import feature may fail before parsing.",
+      "fix": [
+        "Use the file upload path or chunk the import.",
+        "Document where the 10 MiB limit is enforced."
+      ],
+      "acceptance": [
+        "A 10 MiB synthetic import succeeds.",
+        "Ordinary requests remain under 64 KiB."
+      ],
+      "doc_targets": [
+        "docs/V1-PLAN.md §5",
+        "docs/VALIDATION-RELEASE.md I01"
+      ]
+    }
+  ],
+  "quota_math": {
+    "assumptions": {
+      "messages_per_shelf": 100,
+      "files_per_shelf": 100,
+      "sessions_per_shelf": 50,
+      "note_kib": 4,
+      "excerpt_kib": 1,
+      "file_path_kib": 1,
+      "session_title_kib": 0.5,
+      "metadata_kib": 5,
+      "shelves": 500,
+      "storage_cap_mib": 20,
+      "request_cap_kib": 64,
+      "import_cap_mib": 10
+    },
+    "per_shelf_max_kib": 630,
+    "all_shelves_max_mib": 307,
+    "max_shelves_at_cap": 32,
+    "max_shelf_request_kib": 500,
+    "verdict": "inconsistent",
+    "options": [
+      "Keep 20 MiB: reduce to about 50 shelves with 20 messages each, or shrink excerpt/note.",
+      "Keep 500 shelves: raise storage to about 256-320 MiB and request to at least 512 KiB; use item-level writes."
+    ]
+  },
+  "p0_spike": [
+    {
+      "id": "P0-1",
+      "goal": "Bundle hello-world: host row, dsh.client, lib/client.js, local path install.",
+      "pass": "Panel appears; enable/disable/reload 20 times without duplicate registration.",
+      "findings": ["R-001", "R-005"]
+    },
+    {
+      "id": "P0-2",
+      "goal": "Typert ping: host @Remote, generator, client $mount.",
+      "pass": "Call succeeds in a real installation and after packaging.",
+      "findings": ["R-001"]
+    },
+    {
+      "id": "P0-3",
+      "goal": "Panel seat: sidebar.panellist plus main; open with no session; disable/reload.",
+      "pass": "No throw; selection recovers.",
+      "findings": ["R-005", "R-018"]
+    },
+    {
+      "id": "P0-4",
+      "goal": "Domain: per-record plus schemaVersion; read/write/corrupt one/kill mid-write.",
+      "pass": "One bad record does not brick the domain; old or new data remains complete.",
+      "findings": ["R-003"]
+    },
+    {
+      "id": "P0-5",
+      "goal": "Session plus file: ctx.uiWorkspace.openSession and fileAddressFor(sessionId, path).",
+      "pass": "Primary, no-session, archived, and cross-workspace cases all have defined behavior.",
+      "findings": ["R-002", "R-008"]
+    },
+    {
+      "id": "P0-6",
+      "goal": "Message action: conversation.chat.assistant-actions with messageId and excerpt.",
+      "pass": "Assistant message bookmarks; user-message behavior is explicit.",
+      "findings": ["R-006"]
+    },
+    {
+      "id": "P0-7",
+      "goal": "Desktop: install, disable, uninstall, sanitizeProfile recovery.",
+      "pass": "A disposable desktop profile completes the full flow.",
+      "findings": ["R-007"]
+    },
+    {
+      "id": "P0-8",
+      "goal": "Scale and two hosts: 500 shelves; two hosts sharing DSH_HOME.",
+      "pass": "Startup and panel p95 recorded; multi-process behavior concluded.",
+      "findings": ["R-004", "R-010", "R-014"]
+    }
+  ],
+  "data_model_delta": {
+    "TaskShelf": {
+      "add": ["schemaVersion: number", "workspacePath?: string", "originId?: string"],
+      "change": ["fileRefs[].sessionId?: string", "fileRefs[].line?: number", "messageRefs[].seq?: number"],
+      "invariants": [
+        "primarySessionId must be in sessionRefs or undefined.",
+        "Each messageRef has messageId or seq.",
+        "A fileRef must resolve to a session at open time.",
+        "A stale workspaceId is remapped by workspacePath, never by title."
+      ]
+    },
+    "ExportEnvelope": {
+      "add": ["workspaceHints?: Array<{workspaceId, path?, name?}>"]
+    }
+  },
+  "glossary": [
+    {"term": "sidebar.panellist", "meaning": "Left sidebar global panel list seat; paired with a main keyed slot."},
+    {"term": "main", "meaning": "Root-scoped keyed layout slot; conversation also occupies it."},
+    {"term": "dsh.client", "meaning": "package.json client bundle declaration."},
+    {"term": "lib/client.js", "meaning": "Prebuilt client bundle served by the host."},
+    {"term": "Typert", "meaning": "DSH typed RPC generation and descriptor mechanism used by ctx.remote."},
+    {"term": "dsh-api-remotes", "meaning": "Application-level Remote capability selection and forwarded-event allowlist; fixed at build time."},
+    {"term": "dsh-resource://file/session/<id>/<path>", "meaning": "Session-authorized file address."},
+    {"term": "ctx.storageDomain", "meaning": "Schema-validated KV domain with a single-process write chain."},
+    {"term": "domain/changed", "meaning": "In-process change event; not cross-process or cross-window."},
+    {"term": "sanitizeProfile", "meaning": "Desktop native fatal recovery that resets the profile patch and bundle list."},
+    {"term": "engines.dsh", "meaning": "Install and startup version admission range."}
+  ],
+  "do_not_do": [
+    "Do not use the right sidebar for the shelf panel.",
+    "Do not use domain/changed for cross-window realtime sync.",
+    "Do not treat a domain version bump as a migration.",
+    "Do not promise 3 backups, 20 MiB, or 500 shelves before recomputing.",
+    "Do not use the npm CLI to manage the desktop profile.",
+    "Do not treat messageId as a universal message identity.",
+    "Do not promise exact message reveal without a public API.",
+    "Do not assume workspaceId is stable.",
+    "Do not call export/import a transactional backup."
+  ],
+  "next_agent_prompt": "You are maintaining the DSH Task Shelf design docs, not implementing the plugin. Read docs/AI-REVIEW.md and docs/ai-review.json; treat the JSON as canonical. The current docs are v0.2: read reconciliation first and do not redo the addressed findings R-010, R-011, and R-020. Apply doc-only fixes for the open findings R-001, R-002, R-005, R-007, R-013, R-015, R-017, and R-019, then the partial findings R-003, R-004, R-006, R-008, R-009, R-012, R-014, R-016, and R-018. Stop for human confirmation on R-019 (cross-workspace scope). Update the listed doc_targets: add an API-seat section and a third-party client bundle/Remote build section to V1-PLAN; recompute the quota table so 20 MiB, 500 shelves, and 32 MiB are mutually satisfiable; fix the data model for R-002/R-006/R-008/R-012; fix the desktop recovery path in SECURITY §6; add L02/L03/C01/R01 cases to VALIDATION. Preserve the documents' honest 'design stage / not verified' wording. Do not claim implementation. After each fix, append 'applied: <date> <summary>' under the matching finding in docs/AI-REVIEW.md."
+}
