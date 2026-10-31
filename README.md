@@ -1,3 +1,4 @@
+[![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-zh.svg)](https://dsh.market/)
 # DSH Task Shelf 1 · 任务资料夹
 
 **DSH Task Shelf 1 社区试用版（包版本 1.0.0）。** 在交接区域直接按“工作区 → 会话”选择多个来源，合成一个交接包，并按需压缩。目标宿主为 **DSH 0.2.1-rc.3**；已在隔离 Web 运行时与 Edge 中验证界面和本地精简。AI 适配使用模拟流测试，未验证真实模型质量、费用和日常桌面插件组合。
