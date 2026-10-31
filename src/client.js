@@ -170,7 +170,7 @@ function Panel({ ctx, memory }) {
   const options = [...workspaces]; for (const s of shelves) if (!options.some(w => w.id === s.workspaceId)) options.push({ id: s.workspaceId, title: `${s.workspaceTitle}（已移除）` });
   const blocked = busy || !!pending;
   return h('div', { className: 'ts-root' },
-    h('header', { className: 'ts-header' }, h('div', null, h('div', { className: 'ts-eyebrow' }, 'TASK SHELF · 个人试用版'), h('h1', null, '任务资料夹'), h('p', null, '把讨论、线索和下一步放在一起。')),
+    h('header', { className: 'ts-header' }, h('img', { className: 'ts-header-art', src: FISH_ARTWORK, alt: '', 'aria-hidden': true, draggable: false }), h('div', { className: 'ts-header-copy' }, h('div', { className: 'ts-eyebrow' }, 'DSH TASK SHELF 1 · 大肥鱼的天空'), h('h1', null, '任务资料夹'), h('p', null, '把散落的想法收好，下次接着做。')),
       h('div', { className: 'ts-toolbar' }, h(Button, { secondary: true, onClick: () => exportBackup() }, '导出备份'), h(Button, { secondary: true, disabled: blocked, onClick: () => fileInput.current.click() }, '导入备份'), h('input', { ref: fileInput, type: 'file', accept: '.json,application/json', hidden: true, onChange: previewImport }))),
     h('details', { className: `ts-banner ${health?.status === 'error' ? 'ts-error' : health?.status === 'warning' || healthError ? 'ts-warning' : ''}` },
       h('summary', null, healthError || (health ? `启动自检：${health.status === 'ok' ? '通过' : health.status === 'warning' ? '有提醒' : '发现异常'} · ${new Date(health.checkedAt).toLocaleString()}` : '正在获取启动自检结果…')),
@@ -205,7 +205,7 @@ function Panel({ ctx, memory }) {
         !shelf.deletedAt && h(Handoff, { key: shelf.id, ctx, shelf, memory, workspaces, blocked: blocked || dirty }),
         h('footer', { className: 'ts-detail-footer' }, h('small', null, `最近更新 ${new Date(shelf.updatedAt).toLocaleString()}`), shelf.deletedAt ? h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: blocked, onClick: () => execute({ action: 'restore' }) }, '恢复资料夹'), h(Button, { danger: true, disabled: blocked, onClick: () => { if (window.confirm('永久删除这个资料夹及便签？关联的 DSH 会话不会删除。')) execute({ action: 'purge' }); } }, '永久删除')) : h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => execute({ action: 'trash' }) }, '移入回收区')))
         : h('div', { className: 'ts-welcome' }, h('div', { className: 'ts-welcome-icon' }, h(FolderIcon)), h('h2', null, '下次回来，接着做。'), h('p', null, '为一项工作建一个资料夹。\n关联讨论，写下下一步，随时继续。'), h('div', { className: 'ts-steps' }, h('span', null, '01 选择工作区'), h('span', null, '02 新建资料夹'), h('span', null, '03 关联会话与下一步'))))),
-    h('div', { className: 'ts-bottom-note' }, 'DSH Task Shelf 1 · 试用版 · 多工作区合并交接 · 可选 AI 摘要 / 本地精简 · AI 压缩会调用模型'));
+    h('div', { className: 'ts-bottom-note' }, 'DSH Task Shelf 1 · 1.0.1 大肥鱼主题 · 试用版 · AI 摘要会调用模型，本地精简不调用模型'));
 }
 function apply(ctx) {
   const memory = { current: {}, drafts: {}, handoffs: {}, pending: null };

@@ -1,6 +1,6 @@
 # 参与贡献
 
-欢迎提交使用反馈、复现步骤和 Pull Request。当前为 DSH Task Shelf 1 试用版（包版本 1.0.0），目标宿主仅 DSH 0.2.1-rc.3。
+欢迎提交使用反馈、复现步骤和 Pull Request。当前为 DSH Task Shelf 1 · 1.0.1 大肥鱼主题（包版本 1.0.1），目标宿主仅 DSH 0.2.1-rc.3。
 
 ## 本地开发
 

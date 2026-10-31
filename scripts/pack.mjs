@@ -5,7 +5,7 @@ import { createHash } from 'node:crypto';
 import assert from 'node:assert/strict';
 const manifest = JSON.parse(await readFile('package.json', 'utf8'));
 const base = `${manifest.name}-${manifest.version}`;
-const roots = ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'package.json', 'cordis.patch.yml', 'icon.svg', 'README.md', 'lib', 'docs/TRY-IT.md', 'docs/IMPLEMENTATION.md', 'docs/TEST-RESULTS.md', 'docs/DSH-REVIEW-RESPONSE.md'];
+const roots = ['LICENSE', 'THIRD_PARTY_NOTICES.md', 'package.json', 'cordis.patch.yml', 'icon.svg', 'README.md', 'lib', 'docs/TRY-IT.md', 'docs/screenshots/fat-fish-light.png', 'docs/IMPLEMENTATION.md', 'docs/TEST-RESULTS.md', 'docs/DSH-REVIEW-RESPONSE.md'];
 await mkdir('dist', { recursive: true }); await mkdir('.dev', { recursive: true });
 const stage = await mkdtemp(resolve('.dev/package-'));
 const packageDir = join(stage, 'package'); await mkdir(packageDir);

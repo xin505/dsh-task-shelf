@@ -34,7 +34,7 @@ try {
   await page.getByRole('button', { name: '导出诊断报告', exact: true }).click();
   const diagnostic = await diagnosticDownload;
   const report = JSON.parse(await readFile(await diagnostic.path(), 'utf8'));
-  assert.equal(report.status, 'ok'); assert.equal(report.version, '1.0.0');
+  assert.equal(report.status, 'ok'); assert.equal(report.version, '1.0.1');
   assert.equal(report.checks.find(c => c.name === 'storage').status, 'ok');
   assert.deepEqual(report, JSON.parse(await readFile('.dev/dsh-home/task-shelf/health-latest.json', 'utf8')));
   const unauthHealth = await requests.newContext();
