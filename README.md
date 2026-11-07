@@ -1,7 +1,7 @@
 [![DSH Market](https://raw.githubusercontent.com/2BingLing/dsh-market/master/assets/readme/badge-listed-zh.svg)](https://dsh.market/)
 # DSH Task Shelf 1 · 任务资料夹
 
-**DSH Task Shelf 1 社区试用版（包版本 1.0.2）。** 在交接区域直接按“工作区 → 会话”选择多个来源，合成一个交接包，并按需压缩。目标宿主为 **DSH 0.2.1-rc.3 或 0.2.1-rc.5**；已在隔离 Web 运行时与 Edge 中验证界面和本地精简。AI 适配使用模拟流测试，未验证真实模型质量、费用和日常桌面插件组合。
+**DSH Task Shelf 1 社区试用版（包版本 1.0.3）。** 在交接区域直接按“工作区 → 会话”选择多个来源，合成一个交接包，并按需压缩。已在 **DSH 0.2.1-rc.3、0.2.1-rc.5 和 0.2.2-rc.1** 的隔离环境中测试；已在隔离 Web 运行时与 Edge 中验证界面和本地精简。AI 适配使用模拟流测试，未验证真实模型质量、费用和日常桌面插件组合。
 
 把相关会话和下一步放在一个资料夹里，下次回来继续工作。原会话不修改、不移动。默认本地精简不调用模型；用户选用 AI 摘要并点击生成或压缩时，会调用 DSH 默认模型，可能产生费用。带入新会话仍只准备草稿，不自动发送。
 
@@ -33,7 +33,7 @@
 
 见 [试用说明](docs/TRY-IT.md)。DSH → 插件 → 添加插件 → 安装第三方插件 → 填入本地包目录。
 
-安装包发布后，可在本仓库 Releases 页面下载 `dsh-task-shelf-1.0.2.zip`，解压到长期保留的位置，再把其中直接包含 `package.json` 的目录填入 DSH。不要选源码 ZIP，也不要安装后删除该目录。另提供 `.tgz` 和 SHA-256 校验文件；未发布 npm 包。
+安装包发布后，可在本仓库 Releases 页面下载 `dsh-task-shelf-1.0.3.zip`，解压到长期保留的位置，再把其中直接包含 `package.json` 的目录填入 DSH。不要选源码 ZIP，也不要安装后删除该目录。另提供 `.tgz` 和 SHA-256 校验文件；未发布 npm 包。
 
 ## 本地数据
 
@@ -58,3 +58,5 @@ node scripts/pack.mjs
 测试需要目标 DSH 的 peer 包。详见 [实现记录](docs/IMPLEMENTATION.md)、[验证记录](docs/TEST-RESULTS.md)、[兼容性核对](docs/COMPATIBILITY.md)（与现有插件组合及宿主的静态核对，含未实测项）。[原始设计](docs/V1-PLAN.md) 和 [历史 AI 评审](docs/AI-REVIEW.md) 保留作后续参考。
 
 独立社区项目，与 DeepSeek 官方无隶属关系。采用 [MIT 许可证](LICENSE)。欢迎通过 Issues 反馈；参与修改见 [贡献说明](CONTRIBUTING.md)，版本变化见 [更新记录](CHANGELOG.md)。package.json 的 `private: true` 仅用于防止误发 npm，不影响开源。
+
+兼容范围允许更多 0.2.x 正式版，以及 0.2.1 与 0.2.2 的后续 RC；已实测版本仍为 0.2.1-rc.3、0.2.1-rc.5、0.2.2-rc.1。其他版本可安装不等于已经测试；0.2.3-rc 等新的预发布版本仍需单独加入。

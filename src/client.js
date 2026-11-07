@@ -205,7 +205,7 @@ function Panel({ ctx, memory }) {
         !shelf.deletedAt && h(Handoff, { key: shelf.id, ctx, shelf, memory, workspaces, blocked: blocked || dirty }),
         h('footer', { className: 'ts-detail-footer' }, h('small', null, `最近更新 ${new Date(shelf.updatedAt).toLocaleString()}`), shelf.deletedAt ? h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: blocked, onClick: () => execute({ action: 'restore' }) }, '恢复资料夹'), h(Button, { danger: true, disabled: blocked, onClick: () => { if (window.confirm('永久删除这个资料夹及便签？关联的 DSH 会话不会删除。')) execute({ action: 'purge' }); } }, '永久删除')) : h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => execute({ action: 'trash' }) }, '移入回收区')))
         : h('div', { className: 'ts-welcome' }, h('div', { className: 'ts-welcome-icon' }, h(FolderIcon)), h('h2', null, '下次回来，接着做。'), h('p', null, '为一项工作建一个资料夹。\n关联讨论，写下下一步，随时继续。'), h('div', { className: 'ts-steps' }, h('span', null, '01 选择工作区'), h('span', null, '02 新建资料夹'), h('span', null, '03 关联会话与下一步'))))),
-    h('div', { className: 'ts-bottom-note' }, 'DSH Task Shelf 1 · 1.0.2 大肥鱼主题 · 试用版 · AI 摘要会调用模型，本地精简不调用模型'));
+    h('div', { className: 'ts-bottom-note' }, 'DSH Task Shelf 1 · 1.0.3 大肥鱼主题 · 试用版 · AI 摘要会调用模型，本地精简不调用模型'));
 }
 function apply(ctx) {
   const memory = { current: {}, drafts: {}, handoffs: {}, pending: null };

@@ -1,8 +1,8 @@
 import { readFile } from 'node:fs/promises';
-const manifest = JSON.parse(await readFile(new URL('../package.json', import.meta.url)));
-const known = [...manifest.engines.dsh.matchAll(/\d+\.\d+\.\d+(?:-rc\.\d+)?/g)].map(x => x[0]);
-if (!known.length) throw new Error('No explicit tested DSH versions in engines.dsh');
+const known = JSON.parse(await readFile(new URL('../docs/dsh-tested-versions.json', import.meta.url)));
+if (!Array.isArray(known) || !known.length || known.some(v => typeof v !== 'string')) throw new Error('No valid tested DSH versions recorded');
 const tuple = version => { const m = /^(\d+)\.(\d+)\.(\d+)(?:-rc\.(\d+))?$/.exec(version); return m && [Number(m[1]), Number(m[2]), Number(m[3]), m[4] === undefined ? Infinity : Number(m[4])]; };
+if (known.some(v => !tuple(v))) throw new Error('Invalid tested version');
 function cmp(a,b) { for (let i=0;i<4;i++) if (a[i] !== b[i]) return a[i] > b[i] ? 1 : -1; return 0; }
 const supported = known.map(tuple).filter(Boolean).sort(cmp).at(-1);
 const response = await fetch('https://api.github.com/repos/deepseek-ai/DeepSeek-Harness/releases?per_page=100', { headers: { 'Accept': 'application/vnd.github+json', 'User-Agent': 'dsh-task-shelf-compatibility-check', ...(process.env.GITHUB_TOKEN ? { Authorization: `Bearer ${process.env.GITHUB_TOKEN}` } : {}) }, signal: AbortSignal.timeout(20000) });
