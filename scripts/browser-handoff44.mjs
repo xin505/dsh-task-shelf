@@ -39,6 +39,7 @@ try {
   await page.getByLabel('工作区', { exact: true }).selectOption(f.workspaceId);
   await page.locator('.ts-card').filter({ hasText: title }).click();
   assert.equal(await page.locator('.ts-session').count(), 0);
+  await page.getByRole('tab', { name: '会话交接', exact: true }).click();
   await select(f.workspaceId, '任务资料夹 · 合成讨论'); await select(f.foreignWorkspaceId, '任务资料夹 · 跨区合成讨论');
   assert.equal(await page.locator('.ts-selected-row').count(), 2);
   await workspace(f.workspaceId).locator('.ts-workspace-toggle').click();

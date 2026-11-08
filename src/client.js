@@ -21,14 +21,38 @@ function download(value, extension, type) {
   const anchor = document.createElement('a'); anchor.href = url; anchor.download = `task-shelf-${new Date().toISOString().replace(/[:.]/g, '-')}.${extension}`; anchor.click();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
-function FolderIcon() { return h('svg', { viewBox: '0 0 24 24', width: 20, height: 20, fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, 'aria-hidden': true }, h('path', { d: 'M3 6h6l2 3h10v11H3z' }), h('path', { d: 'M7 13h10M7 16h7' })); }
-function Button({ children, onClick, secondary, danger, ...props }) { return h('button', { type: 'button', className: `ts-button ${secondary ? 'ts-secondary' : ''} ${danger ? 'ts-danger' : ''}`, onClick, ...props }, children); }
+function FolderIcon() { return h(Icon, { name: 'folder' }); }
+function Button({ children, onClick, secondary, danger, className = '', ...props }) { return h('button', { type: 'button', className: `ts-button ${secondary ? 'ts-secondary' : ''} ${danger ? 'ts-danger' : ''} ${className}`, onClick, ...props }, children); }
+function IconButton({ label, icon, ...props }) { return h(Button, { secondary: true, className: 'ts-icon-button', 'aria-label': label, title: label, ...props }, h(Icon, { name: icon, size: 18 })); }
+function Menu({ label, children, icon = 'more-horizontal', className = '', text }) {
+  const ref = useRef(null);
+  useEffect(() => {
+    const closeOutside = event => { if (ref.current?.open && !ref.current.contains(event.target)) ref.current.open = false; };
+    document.addEventListener('pointerdown', closeOutside);
+    return () => document.removeEventListener('pointerdown', closeOutside);
+  }, []);
+  return h('details', { ref, className: `ts-menu ${className}`,
+    onToggle: event => { if (event.currentTarget.open) for (const other of document.querySelectorAll('.ts-root details.ts-menu[open]')) if (other !== event.currentTarget) other.open = false; },
+    onKeyDown: event => { if (event.key === 'Escape' && ref.current?.open) { event.stopPropagation(); ref.current.open = false; ref.current.querySelector('summary').focus(); } }
+  }, h('summary', { 'aria-label': label, title: label }, text, h(Icon, { name: icon, size: 18 })),
+    h('div', { className: 'ts-menu-content', onClick: event => { if (event.target.closest('button') && ref.current) ref.current.open = false; } }, children));
+}
+function updatedLabel(value) {
+  const date = new Date(value), now = new Date();
+  if (!Number.isFinite(date.getTime())) return '时间未知';
+  const age = now - date;
+  if (age >= 0 && age < 60000) return '刚刚更新';
+  if (date.toDateString() === now.toDateString()) return `今天 ${date.toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' })}`;
+  return date.toLocaleDateString('zh-CN', { month: 'long', day: 'numeric' });
+}
 function Panel({ ctx, memory }) {
   const [workspaces, setWorkspaces] = useState([]), [workspaceId, setWorkspaceId] = useState(memory.workspaceId || '');
   const [shelves, setShelves] = useState([]), [shelf, setShelf] = useState(null), [query, setQuery] = useState(''), [trash, setTrash] = useState(false);
   const [title, setTitle] = useState(''), [nextStep, setNextStep] = useState(''), [notice, setNotice] = useState(''), [error, setError] = useState('');
   const [busy, setBusy] = useState(false), [loading, setLoading] = useState(true), [creating, setCreating] = useState(false), [newTitle, setNewTitle] = useState('');
   const [savingText, setSavingText] = useState(false);
+  const [editing, setEditing] = useState(false), [detailTab, setDetailTab] = useState('overview');
+  const [showDetail, setShowDetail] = useState(false), [diagnostics, setDiagnostics] = useState(false);
   const [health, setHealth] = useState(null), [healthError, setHealthError] = useState('');
   const [sessions, setSessions] = useState([]), [picker, setPicker] = useState(false), [sessionOffset, setSessionOffset] = useState(null);
   const [sourceWorkspaceId, setSourceWorkspaceId] = useState(''), [sourceLoading, setSourceLoading] = useState(false);
@@ -65,7 +89,7 @@ function Panel({ ctx, memory }) {
       setShelf({ ...result.shelf, revision: saved.revision });
       setError('此处有未保存草稿，服务端版本已变化。请先复制草稿或重新加载，保存时会检查冲突。');
     }
-    setPicker(false); draftVersion.current++;
+    setPicker(false); setEditing(!!saved?.dirty); setShowDetail(true); draftVersion.current++;
   }, []);
   useEffect(() => {
     (async () => {
@@ -84,11 +108,11 @@ function Panel({ ctx, memory }) {
   function allowSwitch() { return !busy && !pending && (!dirty || window.confirm('当前草稿尚未保存。切换后草稿仍保留在此窗口，是否继续？')); }
   function chooseWorkspace(value) {
     if (!allowSwitch()) return;
-    selectionVersion.current++; setWorkspaceId(value); setShelf(null); setPicker(false); setError(''); setNotice(''); setCreating(false);
+    selectionVersion.current++; setWorkspaceId(value); setShelf(null); setPicker(false); setError(''); setNotice(''); setCreating(false); setShowDetail(false); setEditing(false); setDetailTab('overview');
   }
   async function chooseShelf(row) {
     if (!allowSwitch()) return;
-    setError(''); setNotice(''); try { await loadShelf(row.id); } catch(e) { setError(e.message); }
+    setError(''); setNotice(''); try { await loadShelf(row.id); setDetailTab('overview'); } catch(e) { setError(e.message); }
   }
   function setCurrentTask(row) { const next = { ...current, [row.workspaceId]: row.id }; setCurrent(next); memory.current = next; setNotice(`当前任务：${row.title}`); }
   function rememberPending(value) { memory.pending = value; setPending(value); }
@@ -96,16 +120,18 @@ function Panel({ ctx, memory }) {
     rememberPending(null);
     const refreshed = await refreshList();
     const hasNewEdits = request.action === 'edit' && version !== draftVersion.current;
-    if (request.action === 'purge') { delete memory.drafts[request.shelfId]; setShelf(null); memory.selectedId = null; }
+    if (request.action === 'purge') { delete memory.drafts[request.shelfId]; setShelf(null); setShowDetail(false); memory.selectedId = null; }
     else if (result.shelfId) {
       if (request.action === 'edit') {
         // Update only the saved baseline. Never replace the current text with an
         // asynchronous detail fetch, including edits typed during refreshList.
         setShelf(old => old?.id === result.shelfId ? { ...old, title: request.title.trim(), nextStep: request.nextStep, revision: result.revision, updatedAt: refreshed.find(s => s.id === result.shelfId)?.updatedAt ?? old.updatedAt } : old);
-        if (!hasNewEdits) setTitle(request.title.trim());
+        if (!hasNewEdits) { setTitle(request.title.trim()); setEditing(false); }
       } else { delete memory.drafts[result.shelfId]; await loadShelf(result.shelfId, false); }
     }
-    if (request.action === 'create') { setCreating(false); setNewTitle(''); setCurrentTask({ id: result.shelfId, workspaceId: request.workspaceId, title: request.title }); }
+    if (request.action === 'trash') { setTrash(true); setDetailTab('overview'); }
+    if (request.action === 'restore') setTrash(false);
+    if (request.action === 'create') { setDetailTab('overview'); setCreating(false); setNewTitle(''); setCurrentTask({ id: result.shelfId, workspaceId: request.workspaceId, title: request.title }); }
     if (['trash', 'purge'].includes(request.action)) {
       const next = { ...memory.current }; for (const key of Object.keys(next)) if (next[key] === request.shelfId) delete next[key]; memory.current = next; setCurrent(next);
     }
@@ -166,49 +192,119 @@ function Panel({ ctx, memory }) {
       setImportPreview(backup); setError('');
     } catch(e) { setError(e.message); }
   }
+  function beginEdit() { if (!blocked && shelf && !shelf.deletedAt) { setDetailTab('overview'); setEditing(true); } }
+  function cancelEdit() {
+    if (blocked || (dirty && !window.confirm('放弃这次尚未保存的修改？'))) return;
+    draftVersion.current++; setTitle(shelf.title); setNextStep(shelf.nextStep); setEditing(false); setError(''); setNotice('');
+  }
+  function switchTrash(value) {
+    if (!allowSwitch()) return;
+    selectionVersion.current++; setTrash(value); setShelf(null); setPicker(false); setEditing(false); setCreating(false); setShowDetail(false); setDetailTab('overview'); setQuery(''); setError(''); setNotice('');
+  }
   const rows = shelves.filter(s => s.workspaceId === workspaceId && !!s.deletedAt === trash && s.title.toLocaleLowerCase().includes(query.toLocaleLowerCase())).sort((a,b) => b.updatedAt.localeCompare(a.updatedAt));
   const options = [...workspaces]; for (const s of shelves) if (!options.some(w => w.id === s.workspaceId)) options.push({ id: s.workspaceId, title: `${s.workspaceTitle}（已移除）` });
   const blocked = busy || !!pending;
-  return h('div', { className: 'ts-root' },
-    h('header', { className: 'ts-header' }, h('img', { className: 'ts-header-art', src: FISH_ARTWORK, alt: '', 'aria-hidden': true, draggable: false }), h('div', { className: 'ts-header-copy' }, h('div', { className: 'ts-eyebrow' }, 'DSH TASK SHELF 1 · 大肥鱼的天空'), h('h1', null, '任务资料夹'), h('p', null, '把散落的想法收好，下次接着做。')),
-      h('div', { className: 'ts-toolbar' }, h(Button, { secondary: true, onClick: () => exportBackup() }, '导出备份'), h(Button, { secondary: true, disabled: blocked, onClick: () => fileInput.current.click() }, '导入备份'), h('input', { ref: fileInput, type: 'file', accept: '.json,application/json', hidden: true, onChange: previewImport }))),
-    h('details', { className: `ts-banner ${health?.status === 'error' ? 'ts-error' : health?.status === 'warning' || healthError ? 'ts-warning' : ''}` },
-      h('summary', null, healthError || (health ? `启动自检：${health.status === 'ok' ? '通过' : health.status === 'warning' ? '有提醒' : '发现异常'} · ${new Date(health.checkedAt).toLocaleString()}` : '正在获取启动自检结果…')),
-      health && h(React.Fragment, null, ...health.checks.map(check => h('p', { key: check.name }, `${({ ok: '通过', info: '说明', warning: '提醒', error: '异常' })[check.status]}：${check.message}`)),
-        h('p', { className: 'ts-muted' }, '这是本次插件加载时的检查结果，不代表持续监控。报告不含聊天、便签和文件路径。'),
-        h(Button, { secondary: true, onClick: () => download(JSON.stringify(health, null, 2), 'json', 'application/json') }, '导出诊断报告'))),
-    (error || notice) && h('div', { className: `ts-banner ${error ? 'ts-error' : ''}`, role: error ? 'alert' : 'status' }, error || notice,
-      error && h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: busy, onClick: async () => { try { await refreshList(); setError(''); } catch(e) { setError(e.message); } } }, '刷新列表'), h(Button, { secondary: true, onClick: () => exportBackup(true) }, '导出上一份备份'))),
+  const trashCount = shelves.filter(s => s.workspaceId === workspaceId && s.deletedAt).length;
+  const saveState = pending ? '结果待确认' : busy ? '保存中…' : dirty ? '有未保存修改' : '已保存';
+  const healthText = healthError ? '自检暂不可用' : !health ? '正在获取自检结果' : health.status === 'ok' ? '启动自检通过' : health.status === 'warning' ? '启动自检有提醒' : '启动自检异常';
+  const noteBytes = new TextEncoder().encode(nextStep).length;
+  const canSave = !blocked && dirty && !!title.trim() && noteBytes <= 4096;
+  const menuButton = (label, onClick, disabled = blocked, danger = false) => h('button', { type: 'button', disabled, onClick, className: danger ? 'ts-danger-text' : '' }, label);
+  const linkButton = (label, onClick, props = {}) => h(Button, { secondary: true, className: 'ts-link-button', onClick, ...props }, label);
+
+  const editorView = shelf && editing && h('form', { className: 'ts-editor', onSubmit: event => { event.preventDefault(); if (canSave) execute({ action: 'edit', title, nextStep }); } },
+    h('label', { className: 'ts-label' }, '资料夹名称', h('input', { autoFocus: true, className: 'ts-title-input', value: title, maxLength: 120, disabled: !!pending || (busy && !savingText), onChange: event => { draftVersion.current++; setTitle(event.target.value); } })),
+    h('label', { className: 'ts-label', htmlFor: 'ts-next-step' }, '下一步'),
+    h('textarea', { id: 'ts-next-step', value: nextStep, placeholder: '下次从哪里继续？', rows: 4, disabled: !!pending || (busy && !savingText), onChange: event => { draftVersion.current++; setNextStep(event.target.value); } }),
+    h('div', { className: 'ts-edit-footer' }, h('span', { className: noteBytes > 4096 ? 'ts-danger-text' : 'ts-muted' }, `${noteBytes} / 4096 字节`),
+      h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: blocked, onClick: cancelEdit }, '取消编辑'), h(Button, { type: 'submit', disabled: !canSave }, '保存修改'))),
+    dirty && h('div', { className: 'ts-inline ts-draft-actions' },
+      linkButton('复制草稿', async () => { try { await navigator.clipboard.writeText(`${title}\n\n${nextStep}`); setNotice('草稿已复制。'); } catch { download(`${title}\n\n${nextStep}`, 'txt', 'text/plain'); setNotice('草稿已下载。'); } }),
+      linkButton('重新加载', async () => { if (window.confirm('重新加载会丢弃这里的未保存修改，是否继续？')) { delete memory.drafts[shelf.id]; try { await loadShelf(shelf.id, false); setError(''); } catch(e) { setError(e.message); } } }, { disabled: blocked })));
+
+  const sessionsView = shelf && h('section', { className: 'ts-sessions' },
+    h('div', { className: 'ts-section-heading' }, h('h3', null, '相关会话', h('span', { className: 'ts-count' }, shelf.sessionRefs.length)),
+      !shelf.deletedAt && linkButton(h(React.Fragment, null, h(Icon, { name: picker ? 'x' : 'plus', size: 17 }), picker ? '收起选择' : '关联会话'), () => picker ? setPicker(false) : showSessions(false, shelf.workspaceId), { 'aria-label': picker ? '收起选择' : '关联会话', disabled: blocked || dirty })),
+    dirty && h('p', { className: 'ts-muted' }, '先保存上面的修改，再调整会话关联。'),
+    picker && h('div', { className: 'ts-picker' },
+      h('label', { className: 'ts-label' }, '会话来源工作区', h('select', { 'aria-label': '会话来源工作区', value: sourceWorkspaceId, disabled: blocked, onChange: event => showSessions(false, event.target.value) }, !workspaces.some(w => w.id === sourceWorkspaceId) && h('option', { value: sourceWorkspaceId, disabled: true }, '原工作区已移除，请重新选择'), ...workspaces.map(w => h('option', { key: w.id, value: w.id }, w.title)))),
+      h('p', { className: 'ts-muted' }, '可切换工作区选择会话。关联不会移动原会话。'),
+      sourceLoading ? h('p', null, '正在读取会话…') : sessions.length ? sessions.map(session => h('button', { key: session.id, type: 'button', disabled: blocked || session.archived || session.unavailable || shelf.sessionRefs.some(r => r.sessionId === session.id), onClick: () => execute({ action: 'addSession', workspaceId: sourceWorkspaceId, sessionId: session.id }) },
+        h('span', null, session.title), h('small', null, session.archived ? '已归档' : session.unavailable ? '暂不可用' : shelf.sessionRefs.some(r => r.sessionId === session.id) ? '已关联' : '关联'))) : h('p', null, '这个工作区没有可显示的会话；读取失败时可切换工作区重试。'),
+      sessionOffset !== null && h(Button, { secondary: true, disabled: blocked || sourceLoading, onClick: () => showSessions(true) }, '加载更多')),
+    shelf.sessionRefs.length ? shelf.sessionRefs.map(ref => h('div', { className: 'ts-session', key: ref.id },
+      h(Icon, { name: 'message-square' }),
+      h('div', { className: 'ts-session-info' }, h('strong', null, ref.title, ref.id === shelf.primarySessionRefId && h('span', { className: 'ts-badge' }, '主会话')), h('small', null, ref.workspaceTitle ?? shelf.workspaceTitle)),
+      !shelf.deletedAt && h('div', { className: 'ts-session-actions' },
+        h(IconButton, { label: `打开会话：${ref.title}`, icon: 'arrow-right', disabled: blocked, onClick: () => openSession(ref.id) }),
+        h(Menu, { label: `会话操作：${ref.title}` },
+          menuButton(ref.id === shelf.primarySessionRefId ? '取消主会话' : '设为主会话', () => execute({ action: 'primary', refId: ref.id === shelf.primarySessionRefId ? null : ref.id }), blocked || dirty),
+          menuButton('取消关联', () => execute({ action: 'removeSession', refId: ref.id }), blocked || dirty)))))
+      : h('div', { className: 'ts-empty-sessions' }, h(Icon, { name: 'message-square', size: 26 }), h('p', null, '还没有关联会话'), h('small', null, '把相关讨论收在这里，原会话仍由 DSH 保存。')));
+
+  const overviewView = shelf && h('div', { id: 'ts-overview-panel', role: 'tabpanel', 'aria-labelledby': 'ts-overview-tab', hidden: detailTab !== 'overview', className: 'ts-overview' },
+    editing ? editorView : h('section', { className: 'ts-next' },
+      h('div', { className: 'ts-note-heading' }, h('h3', null, '下一步'), !shelf.deletedAt && linkButton('编辑', beginEdit, { 'aria-label': '编辑下一步', disabled: blocked })),
+      h('p', { className: `ts-note-body ${nextStep ? '' : 'ts-muted'}` }, nextStep || '写下下一步，下次回来就知道从哪里继续。')),
+    sessionsView,
+    !shelf.deletedAt && h('button', { type: 'button', className: 'ts-handoff-entry', onClick: () => setDetailTab('handoff') }, h(Icon, { name: 'folder' }), h('span', null, '把讨论带到新的工作区'), h('strong', null, '整理交接包'), h(Icon, { name: 'arrow-right', size: 18 })));
+
+  const detailView = shelf ? h(React.Fragment, null,
+    h('header', { className: 'ts-detail-heading' },
+      h('div', { className: 'ts-kicker' }, h(Icon, { name: 'folder', size: 17 }), shelf.workspaceTitle),
+      h('div', { className: 'ts-title-row' },
+        h('div', { className: 'ts-title-group' }, h('h2', { className: 'ts-task-title' }, shelf.title), !shelf.deletedAt && h(IconButton, { label: '编辑资料夹', icon: 'edit-3', disabled: blocked, onClick: beginEdit })),
+        !shelf.deletedAt && h('div', { className: 'ts-detail-actions' }, h(Button, { 'aria-label': '继续会话', disabled: blocked || !shelf.primarySessionRefId, title: shelf.primarySessionRefId ? '打开主会话' : '关联会话并设为主会话后可继续', onClick: () => openSession() }, '继续会话', h(Icon, { name: 'arrow-up-right', size: 17 })),
+          h(Menu, { label: '资料夹操作' }, menuButton('编辑资料夹', beginEdit), menuButton(current[shelf.workspaceId] === shelf.id ? '当前任务' : '设为当前任务', () => setCurrentTask(shelf), blocked || current[shelf.workspaceId] === shelf.id), menuButton('移入回收区', () => execute({ action: 'trash' }), blocked || dirty, true)))),
+      h('div', { className: 'ts-meta' }, (shelf.deletedAt || current[shelf.workspaceId] === shelf.id) && h('span', { className: 'ts-badge' }, shelf.deletedAt ? '回收区' : '当前任务'), h('span', null, `${shelf.sessionRefs.length} 个关联会话 · ${updatedLabel(shelf.updatedAt)}`)),
+      !shelf.deletedAt && !shelf.primarySessionRefId && h('p', { className: 'ts-muted ts-primary-hint' }, '关联会话后，在会话操作中设为主会话，即可从这里继续。')),
+    !shelf.deletedAt && h('div', { className: 'ts-detail-tabs', role: 'tablist', 'aria-label': '资料夹视图', onKeyDown: event => {
+      const keys = ['ArrowLeft', 'ArrowRight', 'Home', 'End']; if (!keys.includes(event.key)) return;
+      event.preventDefault(); const next = event.key === 'Home' ? 'overview' : event.key === 'End' ? 'handoff' : detailTab === 'overview' ? 'handoff' : 'overview';
+      setDetailTab(next); event.currentTarget.querySelector(`#ts-${next}-tab`).focus();
+    } }, ...[['overview', '资料概览'], ['handoff', '会话交接']].map(([value, label]) => h('button', { key: value, type: 'button', id: `ts-${value}-tab`, role: 'tab', 'aria-controls': `ts-${value}-panel`, 'aria-selected': detailTab === value, tabIndex: detailTab === value ? 0 : -1, className: detailTab === value ? 'active' : '', onClick: () => setDetailTab(value) }, label))),
+    overviewView,
+    !shelf.deletedAt && h('div', { id: 'ts-handoff-panel', role: 'tabpanel', 'aria-labelledby': 'ts-handoff-tab', hidden: detailTab !== 'handoff' },
+      dirty && h('p', { className: 'ts-banner ts-warning', role: 'status' }, '资料概览中有未保存修改，请先保存后再生成交接包。'),
+      h(Handoff, { key: shelf.id, ctx, shelf, memory, workspaces, blocked: blocked || dirty })),
+    shelf.deletedAt && h('div', { className: 'ts-trash-actions' }, h('p', { className: 'ts-muted' }, '资料夹在回收区中。恢复后可继续编辑，原会话没有删除。'), h('div', { className: 'ts-inline' }, h(Button, { disabled: blocked, onClick: () => execute({ action: 'restore' }) }, '恢复资料夹'), h(Button, { secondary: true, className: 'ts-danger-text', disabled: blocked, onClick: () => { if (window.confirm('永久删除这个资料夹及便签？关联的 DSH 会话不会删除。')) execute({ action: 'purge' }); } }, '永久删除'))))
+    : h('div', { className: 'ts-welcome' }, h('div', { className: 'ts-welcome-icon' }, h(Icon, { name: 'folder', size: 36 })), h('h2', null, trash ? '回收区' : '从一项工作开始'), h('p', null, trash ? '选择一个资料夹，查看内容或恢复。' : '选择左侧资料夹，或者新建一个。\n把下一步和相关讨论放在一起。'));
+
+  return h('div', { className: `ts-root ${shelf ? 'ts-has-selection' : ''} ${showDetail && shelf ? 'ts-detail-visible' : ''}` },
+    h('header', { className: 'ts-header' }, h('div', { className: 'ts-brand' }, h(FolderIcon), h('h1', null, '任务资料夹'), h('small', null, 'Task Shelf')),
+      h(Menu, { label: '工具', text: '工具', icon: 'chevron-down', className: 'ts-tools' }, menuButton('导出备份', () => exportBackup(), false), menuButton('导入备份', () => fileInput.current.click()), menuButton('查看诊断', () => setDiagnostics(true), false)),
+      h('input', { ref: fileInput, type: 'file', accept: '.json,application/json', hidden: true, onChange: previewImport })),
+    diagnostics && h('section', { className: 'ts-diagnostics', 'aria-label': '诊断与版本' }, h('div', { className: 'ts-section-heading' }, h('h2', null, '诊断与版本'), h(IconButton, { label: '关闭诊断', icon: 'x', onClick: () => setDiagnostics(false) })),
+      h('p', null, `DSH Task Shelf 1.1.0 · ${healthText}`), health && h(React.Fragment, null, h('p', { className: 'ts-muted' }, `构建 ${health.build} · 检查于 ${new Date(health.checkedAt).toLocaleString()}`), ...health.checks.map(check => h('p', { key: check.name }, `${({ ok: '通过', info: '说明', warning: '提醒', error: '异常' })[check.status]}：${check.message}`)),
+        h('p', { className: 'ts-muted' }, '这是本次插件加载时的检查结果，不代表持续监控。报告不含聊天、便签和文件路径。'), h(Button, { secondary: true, onClick: () => download(JSON.stringify(health, null, 2), 'json', 'application/json') }, '导出诊断报告'))),
+    (healthError || (health && health.status !== 'ok')) && h('div', { className: `ts-banner ${health?.status === 'error' ? 'ts-error' : 'ts-warning'}`, role: 'alert' }, healthError || healthText, linkButton('查看诊断', () => setDiagnostics(true))),
+    error && h('div', { className: 'ts-banner ts-error', role: 'alert' }, error, h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: busy, onClick: async () => { try { await refreshList(); setError(''); } catch(e) { setError(e.message); } } }, '刷新列表'), h(Button, { secondary: true, onClick: () => exportBackup(true) }, '导出上一份备份'))),
     pending && h('div', { className: 'ts-banner ts-warning', role: 'status' }, '有一项操作的结果待确认。', h('div', { className: 'ts-inline' }, h(Button, { disabled: busy, onClick: confirmPending }, '查询保存结果'), h(Button, { secondary: true, disabled: busy, onClick: () => execute(pending.request, true) }, '重试原操作'))),
     importPreview && h('section', { className: 'ts-import' }, h('h2', null, '确认导入'), h('p', null, `将新增 ${importPreview.shelves.length} 个资料夹，保留现有内容。只支持当前 DSH 中仍存在的工作区与会话；引用失效时整批拒绝。`), h('p', { className: 'ts-muted' }, '备份中的便签和回收区也会恢复。不会覆盖同名资料夹，也不会自动发送消息。'), h('div', { className: 'ts-inline' }, h(Button, { disabled: blocked, onClick: () => execute({ action: 'import', backup: importPreview }) }, '确认新增导入'), h(Button, { secondary: true, disabled: blocked, onClick: () => setImportPreview(null) }, '取消'))),
     h('div', { className: 'ts-layout' },
-      h('aside', { className: 'ts-list' },
-        h('label', { className: 'ts-label' }, '工作区', h('select', { value: workspaceId, disabled: blocked, onChange: e => chooseWorkspace(e.target.value), 'aria-label': '工作区' }, !options.length && h('option', { value: '' }, '请先在 DSH 添加工作区'), ...options.map(w => h('option', { key: w.id, value: w.id }, w.title)))),
-        h('div', { className: 'ts-tabs' }, ...[[false, '进行中'], [true, '回收区']].map(([value, label]) => h('button', { key: label, type: 'button', className: trash === value ? 'active' : '', disabled: blocked, onClick: () => { if (allowSwitch()) { setTrash(value); setShelf(null); selectionVersion.current++; } } }, label))),
-        h('input', { className: 'ts-search', placeholder: '搜索资料夹…', value: query, onChange: e => setQuery(e.target.value), 'aria-label': '搜索资料夹' }),
-        !trash && h(Button, { disabled: blocked || !workspaces.some(w => w.id === workspaceId), onClick: () => { if (allowSwitch()) { setCreating(true); setNewTitle(''); } } }, '＋ 新建资料夹'),
-        creating && h('form', { className: 'ts-create', onSubmit: e => { e.preventDefault(); execute({ action: 'create', workspaceId, title: newTitle }); } }, h('label', { className: 'ts-label' }, '资料夹名称', h('input', { autoFocus: true, value: newTitle, maxLength: 120, placeholder: '例如：登录异常排查', onChange: e => setNewTitle(e.target.value) })), h('div', { className: 'ts-inline' }, h('button', { className: 'ts-button', type: 'submit', disabled: blocked || !newTitle.trim() }, '创建'), h(Button, { secondary: true, disabled: blocked, onClick: () => setCreating(false) }, '取消'))),
-        h('div', { className: 'ts-card-list' }, loading ? h('p', { className: 'ts-muted' }, '正在读取…') : rows.length ? rows.map(row => h('button', { key: row.id, type: 'button', className: `ts-card ${shelf?.id === row.id ? 'selected' : ''}`, onClick: () => chooseShelf(row), disabled: blocked }, h('div', { className: 'ts-card-top' }, h(FolderIcon), current[row.workspaceId] === row.id && h('span', { className: 'ts-badge' }, '当前')), h('strong', null, row.title), h('p', null, row.nextStep || '还没有记录下一步'), h('small', null, `${row.sessionCount} 个会话 · ${new Date(row.updatedAt).toLocaleDateString()}`))) : h('div', { className: 'ts-list-empty' }, trash ? '回收区为空' : query ? '没有匹配的资料夹' : '新建一个资料夹，开始整理当前工作。'))),
-      h('main', { className: 'ts-detail' }, shelf ? h(React.Fragment, null,
-        h('div', { className: 'ts-detail-top' }, h('span', { className: 'ts-kicker' }, shelf.workspaceTitle), h('span', { className: 'ts-save-state', role: 'status' }, pending ? '结果待确认' : busy ? '保存中…' : dirty ? '有未保存修改' : '已保存')),
-        h('label', { className: 'ts-label' }, '资料夹名称', h('input', { className: 'ts-title-input', value: title, maxLength: 120, disabled: !!shelf.deletedAt || !!pending || (busy && !savingText), onChange: e => { draftVersion.current++; setTitle(e.target.value); } })),
-        !shelf.deletedAt && h('div', { className: 'ts-inline ts-detail-actions' }, h(Button, { disabled: blocked || !shelf.primarySessionRefId, onClick: () => openSession() }, '继续任务 ↗'), h(Button, { secondary: true, disabled: blocked, onClick: () => setCurrentTask(shelf) }, current[shelf.workspaceId] === shelf.id ? '✓ 当前任务' : '设为当前任务')),
-        h('section', { className: 'ts-next' }, h('label', { className: 'ts-label', htmlFor: 'ts-next-step' }, '下一步'), h('p', { className: 'ts-muted' }, '留一句话，让下次打开时知道从哪里继续。'), h('textarea', { id: 'ts-next-step', value: nextStep, placeholder: '下一步要验证什么？还有哪个问题没有解决？', rows: 6, disabled: !!shelf.deletedAt || !!pending || (busy && !savingText), onChange: e => { draftVersion.current++; setNextStep(e.target.value); } }), h('div', { className: 'ts-edit-footer' }, h('span', { className: 'ts-muted' }, `${new TextEncoder().encode(nextStep).length} / 4096 字节`), !shelf.deletedAt && h(Button, { disabled: blocked || !dirty || !title.trim() || new TextEncoder().encode(nextStep).length > 4096, onClick: () => execute({ action: 'edit', title, nextStep }) }, '保存修改'))),
-        dirty && h('div', { className: 'ts-inline ts-draft-actions' }, h(Button, { secondary: true, onClick: async () => { try { await navigator.clipboard.writeText(`${title}\n\n${nextStep}`); setNotice('草稿已复制。'); } catch { download(`${title}\n\n${nextStep}`, 'txt', 'text/plain'); setNotice('草稿已下载。'); } } }, '复制草稿'), h(Button, { secondary: true, disabled: blocked, onClick: async () => { if (window.confirm('重新加载会丢弃这里的未保存修改，是否继续？')) { delete memory.drafts[shelf.id]; try { await loadShelf(shelf.id, false); setError(''); } catch(e) { setError(e.message); } } } }, '重新加载')),
-        h('section', { className: 'ts-sessions' }, h('div', { className: 'ts-section-heading' }, h('h2', null, '相关会话'), !shelf.deletedAt && h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => picker ? setPicker(false) : showSessions(false, shelf.workspaceId) }, picker ? '收起选择' : '＋ 关联会话')),
-          dirty && h('p', { className: 'ts-muted' }, '先保存上面的修改，再调整会话关联。'),
-          picker && h('div', { className: 'ts-picker' },
-            h('label', { className: 'ts-label' }, '会话来源工作区', h('select', { 'aria-label': '会话来源工作区', value: sourceWorkspaceId, disabled: blocked, onChange: e => showSessions(false, e.target.value) }, !workspaces.some(w => w.id === sourceWorkspaceId) && h('option', { value: sourceWorkspaceId, disabled: true }, '原工作区已移除，请重新选择'), ...workspaces.map(w => h('option', { key: w.id, value: w.id }, w.title)))),
-            h('p', { className: 'ts-muted' }, '可切换工作区选择会话。关联不会移动原会话。'),
-            sourceLoading ? h('p', null, '正在读取会话…') : sessions.length ? sessions.map(session => h('button', { key: session.id, type: 'button', disabled: blocked || session.archived || session.unavailable || shelf.sessionRefs.some(r => r.sessionId === session.id), onClick: () => execute({ action: 'addSession', workspaceId: sourceWorkspaceId, sessionId: session.id }) }, h('span', null, session.title), h('small', null, session.archived ? '已归档' : session.unavailable ? '暂不可用' : shelf.sessionRefs.some(r => r.sessionId === session.id) ? '已关联' : '关联 ＋'))) : h('p', null, '这个工作区没有可显示的会话；读取失败时可切换工作区重试。'), sessionOffset !== null && h(Button, { secondary: true, disabled: blocked || sourceLoading, onClick: () => showSessions(true) }, '加载更多')),
-          shelf.sessionRefs.length ? shelf.sessionRefs.map(ref => h('div', { className: 'ts-session', key: ref.id }, h('div', { className: 'ts-session-info' }, h('strong', null, ref.title), h('small', null, `来源工作区：${ref.workspaceTitle ?? shelf.workspaceTitle}`), h('small', null, ref.id === shelf.primarySessionRefId ? '主会话 · 继续任务将打开这里' : '已关联会话')), !shelf.deletedAt && h('div', { className: 'ts-session-actions' }, h(Button, { secondary: true, disabled: blocked, onClick: () => openSession(ref.id) }, '打开'), h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => execute({ action: 'primary', refId: ref.id === shelf.primarySessionRefId ? null : ref.id }) }, ref.id === shelf.primarySessionRefId ? '取消主会话' : '设为主会话'), h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => execute({ action: 'removeSession', refId: ref.id }) }, '取消关联')))) : h('div', { className: 'ts-empty-sessions' }, '把相关讨论关联到这里。会话原文仍由 DSH 保存。')),
-        !shelf.deletedAt && h(Handoff, { key: shelf.id, ctx, shelf, memory, workspaces, blocked: blocked || dirty }),
-        h('footer', { className: 'ts-detail-footer' }, h('small', null, `最近更新 ${new Date(shelf.updatedAt).toLocaleString()}`), shelf.deletedAt ? h('div', { className: 'ts-inline' }, h(Button, { secondary: true, disabled: blocked, onClick: () => execute({ action: 'restore' }) }, '恢复资料夹'), h(Button, { danger: true, disabled: blocked, onClick: () => { if (window.confirm('永久删除这个资料夹及便签？关联的 DSH 会话不会删除。')) execute({ action: 'purge' }); } }, '永久删除')) : h(Button, { secondary: true, disabled: blocked || dirty, onClick: () => execute({ action: 'trash' }) }, '移入回收区')))
-        : h('div', { className: 'ts-welcome' }, h('div', { className: 'ts-welcome-icon' }, h(FolderIcon)), h('h2', null, '下次回来，接着做。'), h('p', null, '为一项工作建一个资料夹。\n关联讨论，写下下一步，随时继续。'), h('div', { className: 'ts-steps' }, h('span', null, '01 选择工作区'), h('span', null, '02 新建资料夹'), h('span', null, '03 关联会话与下一步'))))),
-    h('div', { className: 'ts-bottom-note' }, 'DSH Task Shelf 1 · 1.0.3 大肥鱼主题 · 试用版 · AI 摘要会调用模型，本地精简不调用模型'));
+      h('aside', { className: 'ts-list', 'aria-label': '资料夹列表' },
+        h('label', { className: 'ts-label' }, '工作区', h('select', { value: workspaceId, disabled: blocked, onChange: event => chooseWorkspace(event.target.value), 'aria-label': '工作区' }, !options.length && h('option', { value: '' }, '请先在 DSH 添加工作区'), ...options.map(w => h('option', { key: w.id, value: w.id }, w.title)))),
+        h('div', { className: 'ts-search-field' }, h(Icon, { name: 'search', size: 17 }), h('input', { className: 'ts-search', placeholder: '搜索资料夹…', value: query, onChange: event => setQuery(event.target.value), 'aria-label': '搜索资料夹' })),
+        h('div', { className: 'ts-list-heading' }, h('span', null, trash ? '回收区' : '资料夹', h('small', { className: 'ts-count' }, rows.length)),
+          !trash && linkButton(h(React.Fragment, null, h(Icon, { name: 'plus', size: 16 }), '新建'), () => { if (allowSwitch()) { setCreating(true); setNewTitle(''); } }, { 'aria-label': '新建资料夹', disabled: blocked || !workspaces.some(w => w.id === workspaceId) })),
+        creating && h('form', { className: 'ts-create', onSubmit: event => { event.preventDefault(); if (newTitle.trim() && !blocked && allowSwitch()) execute({ action: 'create', workspaceId, title: newTitle }); } }, h('label', { className: 'ts-label' }, '资料夹名称', h('input', { autoFocus: true, value: newTitle, maxLength: 120, placeholder: '例如：登录异常排查', onChange: event => setNewTitle(event.target.value) })), h('div', { className: 'ts-inline' }, h(Button, { type: 'submit', disabled: blocked || !newTitle.trim() }, '创建'), h(Button, { secondary: true, disabled: blocked, onClick: () => setCreating(false) }, '取消'))),
+        h('div', { className: 'ts-card-list' }, loading ? h('p', { className: 'ts-muted' }, '正在读取…') : rows.length ? rows.map(row => h('button', { key: row.id, type: 'button', className: `ts-card ${shelf?.id === row.id ? 'selected' : ''}`, 'aria-current': shelf?.id === row.id ? 'true' : undefined, onClick: () => chooseShelf(row), disabled: blocked }, h('strong', null, row.title), h('small', null, `${row.sessionCount} 个会话 · ${updatedLabel(row.updatedAt)}`))) : h('div', { className: 'ts-list-empty' }, trash ? '回收区为空' : query ? '没有匹配的资料夹' : '这里还没有资料夹。点击新建开始整理。')),
+        h('div', { className: 'ts-list-bottom' }, linkButton(h(React.Fragment, null, h(Icon, { name: trash ? 'arrow-left' : 'trash-2', size: 18 }), trash ? '返回资料夹' : '回收区', !trash && h('span', { className: 'ts-count' }, trashCount)), () => switchTrash(!trash), { 'aria-label': trash ? '资料夹列表' : '回收区', disabled: blocked }))),
+      h('main', { className: 'ts-detail', 'aria-label': '资料夹详情' },
+        linkButton(h(React.Fragment, null, h(Icon, { name: 'arrow-left', size: 18 }), '返回资料夹列表'), () => setShowDetail(false), { className: 'ts-link-button ts-back', 'aria-label': '返回资料夹列表' }),
+        detailView,
+        h('footer', { className: 'ts-statusbar' }, h('span', { className: 'ts-save-state', role: 'status', 'aria-live': 'polite' }, h(Icon, { name: dirty || pending ? 'info' : 'check', size: 16 }), shelf ? saveState : '准备就绪'),
+          h('span', { className: 'ts-notice', role: 'status', 'aria-live': 'polite' }, notice && notice !== '已保存' ? notice : ''),
+          linkButton(healthText, () => setDiagnostics(true), { className: 'ts-link-button ts-health-link', title: '查看版本和启动自检报告' })))));
 }
+
 function apply(ctx) {
   const memory = { current: {}, drafts: {}, handoffs: {}, pending: null };
+  ctx.effect(() => {
+    const warn = event => { if (memory.pending || Object.values(memory.drafts).some(draft => draft.dirty)) { event.preventDefault(); event.returnValue = ''; } };
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, 'task-shelf draft protection');
   ctx.effect(() => { const style = document.createElement('style'); style.dataset.pluginCss = PANEL; style.textContent = CSS; document.head.append(style); return () => style.remove(); }, 'task-shelf styles');
   ctx.slots.inject('main', () => ctx.slots.register({ name: 'main', key: PANEL }, () => h(Panel, { ctx, memory })));
   ctx.slots.inject('sidebar.panellist', () => ctx.slots.register({ name: 'sidebar.panellist', id: PANEL, order: 80, label: '任务资料夹' }, FolderIcon));

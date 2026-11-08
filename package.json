@@ -1,6 +1,6 @@
 {
   "name": "dsh-task-shelf",
-  "version": "1.0.3",
+  "version": "1.1.0",
   "description": "DSH 任务资料夹：把会话和下一步放在一起。社区试用版。",
   "type": "module",
   "private": true,
@@ -18,8 +18,13 @@
     "cordis.patch.yml",
     "icon.svg",
     "README.md",
+    "CHANGELOG.md",
+    "design-qa.md",
     "docs/TRY-IT.md",
-    "docs/screenshots/fat-fish-light.png",
+    "docs/screenshots/task-shelf-v1.1-light.png",
+    "docs/screenshots/task-shelf-v1.1-dark.png",
+    "docs/screenshots/task-shelf-v1.1-narrow.png",
+    "docs/screenshots/task-shelf-v1.1-mobile.png",
     "docs/IMPLEMENTATION.md",
     "docs/TEST-RESULTS.md",
     "docs/DSH-REVIEW-RESPONSE.md"
