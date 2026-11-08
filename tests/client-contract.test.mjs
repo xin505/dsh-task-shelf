@@ -6,8 +6,12 @@ import vm from 'node:vm';
 test('packaged client registers keyed main + list entry and releases owned resources', async () => {
   let descriptor;
   const styles = new Set();
+  const unloadListeners = new Set();
   const sandbox = {
-    window: { __ModuleLoader__: { load(value) { descriptor = value; } } },
+    window: { __ModuleLoader__: { load(value) { descriptor = value; } },
+      addEventListener(type, listener) { assert.equal(type, 'beforeunload'); unloadListeners.add(listener); },
+      removeEventListener(type, listener) { assert.equal(type, 'beforeunload'); assert.equal(unloadListeners.delete(listener), true); }
+    },
     document: { createElement() { return { dataset: {}, remove() { styles.delete(this); } }; }, head: { append(style) { styles.add(style); } } }
   };
   vm.runInNewContext(await readFile(new URL('../lib/client.js', import.meta.url), 'utf8'), sandbox);
@@ -35,7 +39,12 @@ test('packaged client registers keyed main + list entry and releases owned resou
     };
     client.apply(ctx);
     assert.equal(styles.size, 1); assert.equal(registrations.size, 2);
+    assert.equal(unloadListeners.size, 1, 'plugin-wide draft guard must not accumulate across reloads');
+    const event = new Event('beforeunload', { cancelable: true });
+    for (const listener of unloadListeners) listener(event);
+    assert.equal(event.defaultPrevented, false, 'empty plugin must not prevent closing');
     disposers.reverse().forEach(dispose => dispose());
     assert.equal(styles.size, 0); assert.equal(registrations.size, 0);
+    assert.equal(unloadListeners.size, 0, 'unloading the plugin must remove its draft guard');
   }
 });
