@@ -1,10 +1,24 @@
 {
   "name": "dsh-task-shelf",
-  "version": "1.1.0",
+  "version": "1.1.1",
   "description": "DSH 任务资料夹：把会话和下一步放在一起。社区试用版。",
   "type": "module",
-  "private": true,
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/xin505/dsh-task-shelf.git"
+  },
+  "homepage": "https://github.com/xin505/dsh-task-shelf#readme",
+  "bugs": {
+    "url": "https://github.com/xin505/dsh-task-shelf/issues"
+  },
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "task-shelf",
+    "session",
+    "handoff"
+  ],
   "main": "lib/index.js",
   "exports": {
     ".": "./lib/index.js",

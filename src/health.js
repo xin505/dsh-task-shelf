@@ -3,10 +3,10 @@ import { dirname, join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 import { writeFileAtomic } from '@deepseek-ai/dsh-atomic-write';
 
-export const PLUGIN_VERSION = '1.1.0';
+export const PLUGIN_VERSION = '1.1.1';
 // Reports deliberately contain no paths, titles, IDs, notes or raw exceptions.
 export async function checkHealth(store, io = {}) {
-  const report = { format: 'dsh-task-shelf-health', version: PLUGIN_VERSION, build: '1.1.0-clean-workspace', checkedAt: new Date().toISOString(), trigger: 'plugin-start', checks: [] };
+  const report = { format: 'dsh-task-shelf-health', version: PLUGIN_VERSION, build: '1.1.1-replay-validation', checkedAt: new Date().toISOString(), trigger: 'plugin-start', checks: [] };
   const add = (name, status, message) => report.checks.push({ name, status, message });
   const directory = dirname(store.file);
   try {

@@ -61,6 +61,46 @@ test('failed or oversized AI output preserves source and cached failure does not
   const after = await plans.status(plan.id); assert.equal(after.sources[0].size, plan.sources[0].size); assert.equal(after.sources[0].method, null);
   assert.equal((await plans.compress(compress(plan.id, 's0'))).ready, true);
 });
+
+for (const invalidation of ['source-moved', 'shelf-edited', 'shelf-trashed', 'shelf-removed']) {
+  test(`successful compression replay rejects ${invalidation} without reading or compressing again`, async () => {
+    const { plans, request, membership, shelf, reads } = setup([18000, 100]);
+    const plan = await plans.prepare(request), body = compress(plan.id, 's0');
+    const first = await plans.compress(body);
+    assert.equal(first.ready, true);
+    assert.deepEqual(await plans.compress(body), first, 'unchanged state must still allow idempotent retries');
+    const readsBefore = reads();
+    if (invalidation === 'source-moved') membership.set('s1', 'w0');
+    if (invalidation === 'shelf-edited') shelf.revision++;
+    if (invalidation === 'shelf-trashed') shelf.deletedAt = new Date().toISOString();
+    if (invalidation === 'shelf-removed') plans.store.snapshot = async () => ({ shelves: [] });
+    const code = invalidation === 'source-moved' ? 'wrong-workspace' : 'conflict';
+    await assert.rejects(plans.status(plan.id), { code });
+    await assert.rejects(plans.compress(body), { code });
+    assert.equal(reads(), readsBefore);
+    assert.equal(plans.plans.get(plan.id).sources[0].history.length, 1);
+  });
+}
+
+test('an in-flight replay revalidates after the shared compression result settles', async () => {
+  let calls = 0, release;
+  const gate = new Promise(resolve => { release = resolve; });
+  const { plans, request, membership } = setup([18000], {
+    summarize: async () => { calls++; await gate; return '合成摘要，仅用于回归。'; }
+  });
+  const plan = await plans.prepare(request), body = compress(plan.id, 's0', 'ai');
+  const first = plans.compress(body);
+  // Revoke after the original operation's own final validation, before the
+  // waiting duplicate resumes. A check only before awaiting would miss this.
+  const revoke = plans.plans.get(plan.id).operations.get(body.operationId).result.then(() => membership.delete('s0'));
+  const replay = plans.compress(body);
+  const rejectedReplay = assert.rejects(replay, { code: 'wrong-workspace' });
+  release();
+  assert.equal((await first).ready, true);
+  await revoke;
+  await rejectedReplay;
+  assert.equal(calls, 1, 'a duplicate must never trigger an additional model call');
+});
 test('invalid selections fail before text reads; moved and stale sources cannot be compressed', async () => {
   const { plans, request, membership, shelf, reads } = setup([18000, 100]);
   await assert.rejects(plans.prepare({ ...request, sources: [request.sources[0], request.sources[0]] }));
