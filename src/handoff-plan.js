@@ -85,7 +85,14 @@ export class HandoffPlans {
     assert(['local', 'ai'].includes(body.method), 'invalid', '请选择 AI 摘要或本地精简。');
     const fingerprint = digest({ sourceId: body.sourceId, method: body.method, model: body.model });
     const previous = plan.operations.get(body.operationId);
-    if (previous) { assert(previous.fingerprint === fingerprint, 'operation-conflict', '同一压缩操作不能更改内容。', 409); await previous.result; return publicPlan(plan); }
+    if (previous) {
+      assert(previous.fingerprint === fingerprint, 'operation-conflict', '同一压缩操作不能更改内容。', 409);
+      await previous.result;
+      // A cached success is not permission to disclose a now-stale plan.
+      // Recheck after waiting: sources may change while the original completes.
+      await this.validate(plan);
+      return publicPlan(plan);
+    }
     assert(!plan.busy, 'busy', '这份交接包正在压缩，请等待完成。', 409);
     assert(plan.operations.size < 30, 'plan-quota', '这份交接包的压缩尝试已达上限，请下载需要保留的内容后重新生成。', 429);
     const source = plan.sources.find(s => s.key === body.sourceId); assert(source, 'invalid', '只能压缩已选会话。');
